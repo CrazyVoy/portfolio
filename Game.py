@@ -138,7 +138,82 @@ def weapon_magazin():
             exit = (input("Хотите ли вы выйти с магазина? 1 - выход, 0 - нет"))
             if exit == "1":
                 break
+
+def item(): 
+    shlem = ["Кожаный шлем", "Деревяный шлем", "Железная маска"]
+    kirasa = ["Кожаная накидка", "Деревяный доспех", "Пластинчитый доспех"]
+    oruhie = ['Тупой меч', 'Булава со сколами', 'Маленький клинок', 'Молоток', 'Волшебная палочка', 'Кривой лук']
+    shit = ['Деревяный щит с дырами']
+    botinky = ["Кожаные сапоги", "Деревяные сапоги", "Полу-железные сандали"]
+    amulet = ["Обычный амулет"]
+    persten = ["Обычный перстень"]
+
+    shlem1 = []
+    oruhie1 = []
+    kirasa1 = []
+    persten1 = []
+    amulet1 = []
+    shit1 = []
+    botinky1 = []
+
+    inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
+    hochu_nadet = ""
+
+
+    invent = input()
+    if invent == "i":
+        print(inventory_gg) 
+        invent1 = input("Желаете ли вы надеть что-нибудь? д/н") 
+        if invent1 == "д":
+            for k, item in enumerate(inventory_gg):
+                print(k , item) 
+        num = int(input())
+        hochu_nadet = inventory_gg[num]
+
+    for i in shlem:
+        if i == hochu_nadet:
+            shlem1.clear()
+            shlem1.append(hochu_nadet)
+            print("На вашей голове", shlem1)
         
+    for i in amulet:
+        if i == hochu_nadet:
+            amulet1.clear()
+            amulet1.append(hochu_nadet)
+            print("На вашей шее сияет", amulet1)
+
+    for i in oruhie:
+        if i == hochu_nadet:
+            oruhie1.clear()
+            oruhie1.append(hochu_nadet)
+            print("В правой руке", oruhie1)
+        
+    for i in shit:
+        if i == hochu_nadet:
+            shit1.clear()
+            shit1.append(hochu_nadet)
+            print("В левой руке", shit1)
+        
+    for i in persten:
+        if i == hochu_nadet:
+            persten1.clear()
+            persten1.append(hochu_nadet)
+            print("На вашей руке сияет", persten1)
+
+    for i in kirasa:
+        if i == hochu_nadet:
+            kirasa1.clear()
+            kirasa1.append(hochu_nadet)
+            print("На вас", kirasa1)
+        
+    for i in botinky:
+        if i == hochu_nadet:
+            botinky1.clear()
+            botinky1.append(hochu_nadet)
+            print("На ваших ногах", botinky1)
+    if len(inventory_gg) > 20:
+        print(inventory_gg)
+        print("Нужно выкинуть лишний хлам")        
 
 while True:
     b = ploshad()
@@ -153,77 +228,5 @@ while True:
     if b == "5":
         dangeon()
     if b == "i":
-        shlem = ["Кожаный шлем", "Деревяный шлем", "Железная маска"]
-kirasa = ["Кожаная накидка", "Деревяный доспех", "Пластинчитый доспех"]
-oruhie = ['Тупой меч', 'Булава со сколами', 'Маленький клинок', 'Молоток', 'Волшебная палочка', 'Кривой лук']
-shit = ['Деревяный щит с дырами']
-botinky = ["Кожаные сапоги", "Деревяные сапоги", "Полу-железные сандали"]
-amulet = ["Обычный амулет"]
-persten = ["Обычный перстень"]
-
-shlem1 = []
-oruhie1 = []
-kirasa1 = []
-persten1 = []
-amulet1 = []
-shit1 = []
-botinky1 = []
-
-inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
-hochu_nadet = ""
-
-
-invent = input()
-if invent == "i":
-    print(inventory_gg) 
-    invent1 = input("Желаете ли вы надеть что-нибудь? д/н") 
-    if invent1 == "д":
-        for k, item in enumerate(inventory_gg):
-            print(k , item) 
-    num = int(input())
-    hochu_nadet = inventory_gg[num]
-
-for i in shlem:
-    if i == hochu_nadet:
-        shlem1.clear()
-        shlem1.append(hochu_nadet)
-        print("На вашей голове", shlem1)
+        item()
         
-for i in amulet:
-    if i == hochu_nadet:
-        amulet1.clear()
-        amulet1.append(hochu_nadet)
-        print("На вашей шее сияет", amulet1)
-
-for i in oruhie:
-    if i == hochu_nadet:
-        oruhie1.clear()
-        oruhie1.append(hochu_nadet)
-        print("В правой руке", oruhie1)
-        
-for i in shit:
-    if i == hochu_nadet:
-        shit1.clear()
-        shit1.append(hochu_nadet)
-        print("В левой руке", shit1)
-        
-for i in persten:
-    if i == hochu_nadet:
-        persten1.clear()
-        persten1.append(hochu_nadet)
-        print("На вашей руке сияет", persten1)
-
-for i in kirasa:
-    if i == hochu_nadet:
-        kirasa1.clear()
-        kirasa1.append(hochu_nadet)
-        print("На вас", kirasa1)
-        
-for i in botinky:
-    if i == hochu_nadet:
-        botinky1.clear()
-        botinky1.append(hochu_nadet)
-        print("На ваших ногах", botinky1)
-if len(inventory_gg) > 20:
-    print(inventory_gg)
-    print("Нужно выкинуть лишний хлам")
