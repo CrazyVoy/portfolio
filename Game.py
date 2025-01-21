@@ -1,8 +1,4 @@
 import random
-inventory_gg = []
-if len(inventory_gg) > 20:
-    print(inventory_gg)
-    print("Нужно выкинуть лишний хлам")
     
 class GG:
     name = input("Введите имя вашего Героя")
@@ -37,8 +33,8 @@ def ploshad():
     print('\nВы вышли на площадь города')
     print(f'{GG.name}, думает с чего начать свой путь. Перед вами находится:\n|1| Таверна, в которой можно было бы взять с собой путников в приключение,\n|2| Магазин оружия, \
 где можно было бы обзавестись хорошей блестяшкой, которая могла бы не только ослепить, но возможно и ранить кого-нибудь,\n|3| Магазин доспехов, в котором можно было \
-бы купить какую нибудь банку для защиты,\n|4| Зельеварня, в которой можно купить что-нибудь шипящее, возможно даже не газировку,\n|5| прямиком в ад, то есть в \
-подземелье')
+бы купить какую нибудь банку для защиты,\n|4| Зельеварня, в которой можно купить что-нибудь шипящее, возможно даже не газировку,\n|5| Прямиком в ад, то есть в \
+подземелье, \n|i| Для инвентаря')
     b = input("Нажмите цифру, куда бы вы хотели пойти")
     return b
 def tavern():
@@ -55,14 +51,29 @@ def weapon_magazin():
         a = input("[Что вы выберете: '|0| Тупой меч : Цена - 5', '|1| Булава со сколами: Цена - 5', '|2| Маленький клинок: Цена - 5', '|3| Молоток: Цена - 5', '|4| Деревяный щит с дырами: Цена - 5', '|5| Волшебная палочка: Цена - 5', '|6| Кривой лук: Цена - 5', '|7| Вернуться на площадь']") 
         if a == "0":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
+            print("Даёт характеристики: урон(1), шанс кровотечения 5% (по 1 урон/3 хода)")
             if confidence == "д":
                 inventory_gg.append(weapon[0])
                 print(inventory_gg)
                 warrior.wallet -= weapon1[0]
                 print(warrior.wallet)
                 print('Вряд-ли сможете этим кого-то зарезать')
+                damage = 1
+                
             if confidence == "н":
-                return weapon_magazin()      
+                return weapon_magazin()    
+        item = input("Хотите ли вы надеть оружие? д/н")
+        if item == "д":
+            item_gg.append(weapon[0])
+            print("На персонаже", item_gg)
+            inventory_gg.pop(0)
+            print("В рюкзаке", inventory_gg)
+            damage_gg = random.randint(6,11)
+            bleeding_b = random.randint(1,20)
+   # if bleeding_b == 1:
+        # bleeding_a = hp_monster - 1 < 3 move
+        if item == "н":
+            inventory_gg.apend(weapon[0])  
         if a == "1":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             if confidence == "д":
@@ -141,3 +152,78 @@ while True:
         potion_factory()
     if b == "5":
         dangeon()
+    if b == "i":
+        shlem = ["Кожаный шлем", "Деревяный шлем", "Железная маска"]
+kirasa = ["Кожаная накидка", "Деревяный доспех", "Пластинчитый доспех"]
+oruhie = ['Тупой меч', 'Булава со сколами', 'Маленький клинок', 'Молоток', 'Волшебная палочка', 'Кривой лук']
+shit = ['Деревяный щит с дырами']
+botinky = ["Кожаные сапоги", "Деревяные сапоги", "Полу-железные сандали"]
+amulet = ["Обычный амулет"]
+persten = ["Обычный перстень"]
+
+shlem1 = []
+oruhie1 = []
+kirasa1 = []
+persten1 = []
+amulet1 = []
+shit1 = []
+botinky1 = []
+
+inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
+hochu_nadet = ""
+
+
+invent = input()
+if invent == "i":
+    print(inventory_gg) 
+    invent1 = input("Желаете ли вы надеть что-нибудь? д/н") 
+    if invent1 == "д":
+        for k, item in enumerate(inventory_gg):
+            print(k , item) 
+    num = int(input())
+    hochu_nadet = inventory_gg[num]
+
+for i in shlem:
+    if i == hochu_nadet:
+        shlem1.clear()
+        shlem1.append(hochu_nadet)
+        print("На вашей голове", shlem1)
+        
+for i in amulet:
+    if i == hochu_nadet:
+        amulet1.clear()
+        amulet1.append(hochu_nadet)
+        print("На вашей шее сияет", amulet1)
+
+for i in oruhie:
+    if i == hochu_nadet:
+        oruhie1.clear()
+        oruhie1.append(hochu_nadet)
+        print("В правой руке", oruhie1)
+        
+for i in shit:
+    if i == hochu_nadet:
+        shit1.clear()
+        shit1.append(hochu_nadet)
+        print("В левой руке", shit1)
+        
+for i in persten:
+    if i == hochu_nadet:
+        persten1.clear()
+        persten1.append(hochu_nadet)
+        print("На вашей руке сияет", persten1)
+
+for i in kirasa:
+    if i == hochu_nadet:
+        kirasa1.clear()
+        kirasa1.append(hochu_nadet)
+        print("На вас", kirasa1)
+        
+for i in botinky:
+    if i == hochu_nadet:
+        botinky1.clear()
+        botinky1.append(hochu_nadet)
+        print("На ваших ногах", botinky1)
+if len(inventory_gg) > 20:
+    print(inventory_gg)
+    print("Нужно выкинуть лишний хлам")
