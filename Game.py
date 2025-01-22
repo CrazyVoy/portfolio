@@ -1,32 +1,51 @@
 import random
     
 class GG:
-    name = input("Введите имя вашего Героя")
-    print(name)
-    gender = input("Пол Героя - парень/девушка")
-    print(gender)
-    style = input("Класс Героя - Воин, Лучник, Маг")
-    print(style)
-    wallet = 100
+    name = ""
+    gender = ""
+    style = ""
+    wallet = 0
+    hp_gg = 0
+    damage_gg = 0
+    defense_gg = 0
+    agility_gg = 0
+    critical_gg = 0
+    
+    shlem1 = []
+    oruhie1 = []
+    kirasa1 = []
+    persten1 = []
+    amulet1 = []
+    shit1 = []
+    botinky1 = []
 
-if GG.style == "Воин":
+    inventory_gg = []
+    # создал по чертежу пустого персонажа
+warrior = GG()
+# наполняешь данными, сначала имя, пол, стиль
+user_name = input("Назовите имя своего героя")
+warrior.name = user_name
+
+user_gender = input("Укажите пол Героя")
+warrior.gender = user_gender
+
+user_style = input("Укажите стиль Героя: Воин, Лучник, Маг")
+warrior.style = user_style
+if user_style == "Воин":
     hp_gg = 100
     damage_gg = random.randint(5,10)
-    defense_gg = 1
-    agility_gg = 1
+if user_style == "Лучник":
+    hp_gg = 80
+    damage_gg = random.randint(7,12)
     critical_gg = 1
-if GG.style == "Лучник":
-    hp_gg = 80
-    damage_gg = random.randint(7,12)
-    defense_gg = 1
-    agility_gg = 2
-    critical_gg = 2
-if GG.style == "Маг":
-    hp_gg = 80
-    damage_gg = random.randint(7,12)
-    defense_gg = 0
     agility_gg = 1
+if user_style == "Маг":
+    hp_gg = 80
+    damage_gg = random.randint(7,12)
     critical_gg = 2
+    defense_gg = -1
+
+# потом if-ами в зависимости от того, что выбрал игрок, заполнишь остальные значение типа hp, damage и т.п.
 inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
 shlem1 = []
 oruhie1 = []
@@ -242,4 +261,4 @@ while True:
         dangeon()
     if b == "i":
         item()
-                      
+            
