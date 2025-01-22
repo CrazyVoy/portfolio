@@ -27,7 +27,16 @@ if GG.style == "Маг":
     defense_gg = 0
     agility_gg = 1
     critical_gg = 2
+inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
+shlem1 = []
+oruhie1 = []
+kirasa1 = []
+persten1 = []
+amulet1 = []
+shit1 = []
+botinky1 = []
 warrior = GG()
+
 print(f"Вы {GG.gender} {GG.name} {GG.style}, недавно вами было взято задание - отправиться в жуткое подземелье ради спасения дочери императора, похищенной злым некромантом")
 def ploshad():
     print('\nВы вышли на площадь города')
@@ -45,16 +54,8 @@ def item():
     botinky = ["Кожаные сапоги", "Деревяные сапоги", "Полу-железные сандали"]
     amulet = ["Обычный амулет"]
     persten = ["Обычный перстень"]
-   
-    shlem1 = []
-    oruhie1 = []
-    kirasa1 = []
-    persten1 = []
-    amulet1 = []
-    shit1 = []
-    botinky1 = []
 
-    inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
+    
     hochu_nadet = ""
 
 
@@ -81,8 +82,8 @@ def item():
 
     for i in oruhie:
         if i == hochu_nadet:
-            oruhie1.clear()
-            oruhie1.append(hochu_nadet)
+            warrior.oruhie1.clear()
+            warrior.oruhie1.append(hochu_nadet)
             print("В правой руке", oruhie1)
         
     for i in shit:
@@ -140,17 +141,18 @@ def weapon_magazin():
         item = input("Хотите ли вы надеть оружие? д/н")
         if item == "д":
             oruhie1.append(weapon[0])
-            print("На персонаже", item_gg)
+            print("В правой руке", oruhie1)
             inventory_gg.pop(0)
             print("В рюкзаке", inventory_gg)
             damage_gg = random.randint(6,11)
             bleeding_b = random.randint(1,20)
-   # if bleeding_b == 1:
+   # if bleeding_b == damage 1:
         # bleeding_a = hp_monster - 1 < 3 move
         if item == "н":
-            inventory_gg.apend(weapon[0])  
+            inventory_gg.append(weapon[0])  
         if a == "1":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
+            print("Даёт характеристики: урон(1), шанс оглушения 5%(противник пропускает ход)")
             if confidence == "д":
                 inventory_gg.append(weapon[1])
                 print(inventory_gg)
@@ -158,7 +160,19 @@ def weapon_magazin():
                 print(warrior.wallet)
                 print('Возможно расыпется при ударе')
             if confidence == "н":
-                return weapon_magazin()      
+                return weapon_magazin()     
+        item = input("Хотите ли вы надеть оружие? д/н")
+        if item == "д":
+            oruhie1.append(weapon[1])
+            print("В правой руке", oruhie1)
+            inventory_gg.pop(1)
+            print("В рюкзаке", inventory_gg)
+            damage_gg = random.randint(6,11)
+   # if stun_b == 1 move: 
+        # if stun_c = random.randint(1,20)
+             # stun_a = not damage_monster   
+        if item == "н":
+            inventory_gg.append(weapon[1])   
         if a == "2":
              confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
              if confidence == "д":
@@ -228,4 +242,4 @@ while True:
         dangeon()
     if b == "i":
         item()
-            
+                      
