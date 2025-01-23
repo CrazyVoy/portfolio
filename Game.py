@@ -18,6 +18,7 @@ class GG:
     amulet1 = []
     shit1 = []
     botinky1 = []
+    wallet = 100
 
     inventory_gg = []
     # создал по чертежу пустого персонажа
@@ -45,21 +46,10 @@ if user_style == "Маг":
     critical_gg = 2
     defense_gg = -1
 
-# потом if-ами в зависимости от того, что выбрал игрок, заполнишь остальные значение типа hp, damage и т.п.
-inventory_gg = ["Кривой лук", "Кожаный шлем", "Деревяный щит с дырами", "Деревяный доспех", "Полу-железные сандали", "Обычный амулет", "Обычный перстень"]
-shlem1 = []
-oruhie1 = []
-kirasa1 = []
-persten1 = []
-amulet1 = []
-shit1 = []
-botinky1 = []
-warrior = GG()
-
-print(f"Вы {GG.gender} {GG.name} {GG.style}, недавно вами было взято задание - отправиться в жуткое подземелье ради спасения дочери императора, похищенной злым некромантом")
+print(f"Вы {warrior.gender} {warrior.name} {warrior.style}, недавно вами было взято задание - отправиться в жуткое подземелье ради спасения дочери императора, похищенной злым некромантом")
 def ploshad():
     print('\nВы вышли на площадь города')
-    print(f'{GG.name}, думает с чего начать свой путь. Перед вами находится:\n|1| Таверна, в которой можно было бы взять с собой путников в приключение,\n|2| Магазин оружия, \
+    print(f'{warrior.name}, думает с чего начать свой путь. Перед вами находится:\n|1| Таверна, в которой можно было бы взять с собой путников в приключение,\n|2| Магазин оружия, \
 где можно было бы обзавестись хорошей блестяшкой, которая могла бы не только ослепить, но возможно и ранить кого-нибудь,\n|3| Магазин доспехов, в котором можно было \
 бы купить какую нибудь банку для защиты,\n|4| Зельеварня, в которой можно купить что-нибудь шипящее, возможно даже не газировку,\n|5| Прямиком в ад, то есть в \
 подземелье, \n|i| Для инвентаря')
@@ -79,13 +69,13 @@ def item():
 
 
     if b == "i":
-       print(inventory_gg) 
+       print(warrior.inventory_gg) 
        invent1 = input("Желаете ли вы надеть что-нибудь? д/н") 
        if invent1 == "д":
-            for k, item in enumerate(inventory_gg):
+            for k, item in enumerate(warrior.inventory_gg):
                 print(k , item) 
        num = int(input())
-       hochu_nadet = inventory_gg[num]
+       hochu_nadet = warrior.inventory_gg[num]
 
     for i in shlem:
         if i == hochu_nadet:
@@ -101,9 +91,11 @@ def item():
 
     for i in oruhie:
         if i == hochu_nadet:
+            if len(warrior.oruhie1) > 0:
+                warrior.inventory_gg.append(warrior.oruhie1[0])
             warrior.oruhie1.clear()
             warrior.oruhie1.append(hochu_nadet)
-            print("В правой руке", oruhie1)
+            print("В правой руке", warrior.oruhie1)
         
     for i in shit:
         if i == hochu_nadet:
@@ -148,8 +140,8 @@ def weapon_magazin():
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             print("Даёт характеристики: урон(1), шанс кровотечения 5% (по 1 урон/3 хода)")
             if confidence == "д":
-                inventory_gg.append(weapon[0])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[0])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[0]
                 print(warrior.wallet)
                 print('Вряд-ли сможете этим кого-то зарезать')
@@ -157,46 +149,48 @@ def weapon_magazin():
                 
             if confidence == "н":
                 return weapon_magazin()    
-        item = input("Хотите ли вы надеть оружие? д/н")
-        if item == "д":
-            oruhie1.append(weapon[0])
-            print("В правой руке", oruhie1)
-            inventory_gg.pop(0)
-            print("В рюкзаке", inventory_gg)
-            damage_gg = random.randint(6,11)
-            bleeding_b = random.randint(1,20)
+            item = input("Хотите ли вы надеть оружие? д/н")
+            if item == "д":
+                warrior.oruhie1.append(weapon[0])
+                print("В правой руке", warrior.oruhie1)
+                oruhie1_0 = warrior.inventory_gg.index(weapon[0])
+                warrior.inventory_gg.pop(oruhie1_0)
+                print("В рюкзаке", warrior.inventory_gg)
+                damage_gg = random.randint(6,11)
+                bleeding_b = random.randint(1,20)
    # if bleeding_b == damage 1:
         # bleeding_a = hp_monster - 1 < 3 move
-        if item == "н":
-            inventory_gg.append(weapon[0])  
+            if item == "н":
+                warrior.inventory_gg.append(weapon[0])  
         if a == "1":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             print("Даёт характеристики: урон(1), шанс оглушения 5%(противник пропускает ход)")
             if confidence == "д":
-                inventory_gg.append(weapon[1])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[1])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[1]
                 print(warrior.wallet)
                 print('Возможно расыпется при ударе')
             if confidence == "н":
                 return weapon_magazin()     
-        item = input("Хотите ли вы надеть оружие? д/н")
-        if item == "д":
-            oruhie1.append(weapon[1])
-            print("В правой руке", oruhie1)
-            inventory_gg.pop(1)
-            print("В рюкзаке", inventory_gg)
-            damage_gg = random.randint(6,11)
+            item = input("Хотите ли вы надеть оружие? д/н")
+            if item == "д":
+                warrior.oruhie1.append(weapon[1])
+                print("В правой руке", warrior.oruhie1)
+                oruhie1_1 = warrior.inventory_gg.index(weapon[1])
+                warrior.inventory_gg.pop(oruhie1_1)
+                print("В рюкзаке", warrior.inventory_gg)
+                damage_gg = random.randint(6,11)
    # if stun_b == 1 move: 
         # if stun_c = random.randint(1,20)
              # stun_a = not damage_monster   
-        if item == "н":
-            inventory_gg.append(weapon[1])   
+            if item == "н":
+                warrior.inventory_gg.append(weapon[1])   
         if a == "2":
              confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
              if confidence == "д":
-                inventory_gg.append(weapon[2])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[2])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[2]
                 print(warrior.wallet)   
                 print('Зуботочка')
@@ -205,8 +199,8 @@ def weapon_magazin():
         if a == "3":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             if confidence == "д":
-                inventory_gg.append(weapon[3])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[3])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[3]
                 print(warrior.wallet)   
                 print('Можно заколотить гвоздь')
@@ -215,8 +209,8 @@ def weapon_magazin():
         if a == "4":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             if confidence == "д":
-                inventory_gg.append(weapon[4])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[4])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[4]
                 print(warrior.wallet)   
                 print('Сквозь него видишь просторы')
@@ -225,8 +219,8 @@ def weapon_magazin():
         if a == "5":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             if confidence == "д":            
-                inventory_gg.append(weapon[5])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[5])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[5]
                 print(warrior.wallet)   
                 print('Точно ли волшебная?')
@@ -235,8 +229,8 @@ def weapon_magazin():
         if a == "6":
             confidence = input("Вы уверены, что хотите приобрести эту вещь? д/н")
             if confidence == "д":     
-                inventory_gg.append(weapon[6])
-                print(inventory_gg)
+                warrior.inventory_gg.append(weapon[6])
+                print(warrior.inventory_gg)
                 warrior.wallet -= weapon1[6]
                 print(warrior.wallet)   
                 print('Не факт, что попадешь в цель, если конечно не бить им')
@@ -261,4 +255,4 @@ while True:
         dangeon()
     if b == "i":
         item()
-            
+                
