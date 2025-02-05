@@ -4,9 +4,8 @@ class GG:
     name = ""
     gender = ""
     style = ""
-    wallet = 0
     hp_gg = 0
-    damage_gg = 0
+    damage_gg = 5
     defense_gg = 0
     agility_gg = 0
     critical_gg = 0
@@ -21,8 +20,55 @@ class GG:
     wallet = 100
 
     inventory_gg = []
+    group = []
+    
+class Mc:
+    name_mc = "McGregor"
+    hp_mc = 50
+    damage_mc = random.randint(2,6)
+    defense_mc = 1
+    agility_mc = 1
+    critical_mc = 1 
+    
+    inventory_mc = []
+    
+class Paw:
+    name_paw = "Paw"
+    hp_paw = 150
+    damage_paw = random.randint(7,13)
+    defense_paw = 1
+    agility_paw = 1
+    critical_paw = 1 
+    
+    inventory_paw = []
+    
+class Smile:
+    name_smile = "Smile"
+    hp_smile = 100
+    damage_smile = random.randint(2,6)
+    mag_damage_smile = random.randint(7,13)
+    defense_smile = 1
+    agility_smile = 1
+    critical_smile = 1 
+    
+    inventory_smile = []
+    
+class Cecity:
+    name_cecity = "Cecity"
+    hp_cecity = 100
+    damage_cecity = random.randint(5,10)
+    defense_cecity = 1 #5%
+    agility_cecity = 2 #10%
+    critical_cecity = 2 #10%
+    
+    inventory_cecity = []
     # создал по чертежу пустого персонажа
 warrior = GG()
+mc = Mc()
+paw = Paw()
+smile = Smile()
+cecity = Cecity()
+
 # наполняешь данными, сначала имя, пол, стиль
 user_name = input("Назовите имя своего героя")
 warrior.name = user_name
@@ -30,21 +76,22 @@ warrior.name = user_name
 user_gender = input("Укажите пол Героя")
 warrior.gender = user_gender
 
+
 user_style = input("Укажите стиль Героя: Воин, Лучник, Маг")
 warrior.style = user_style
 if user_style == "Воин":
-    hp_gg = 100
-    damage_gg = random.randint(5,10)
+    warrior.hp_gg = 100
+    warrior.damage_gg = random.randint(warrior.damage_gg , warrior.damage_gg + 5)
 if user_style == "Лучник":
-    hp_gg = 80
-    damage_gg = random.randint(7,12)
-    critical_gg = 1
-    agility_gg = 1
+    warrior.hp_gg = 80
+    warrior.damage_gg = random.randint(warrior.damage_gg + 2, warrior.damage_gg + 7)
+    warrior.critical_gg = 1
+    warrior.agility_gg = 1
 if user_style == "Маг":
-    hp_gg = 80
-    damage_gg = random.randint(7,12)
-    critical_gg = 2
-    defense_gg = -1
+    warrior.hp_gg = 80
+    warrior.damage_gg = random.randint(warrior.damage_gg + 2,warrior.damage_gg + 7)
+    warrior.critical_gg = 2
+    warrior.defense_gg = -1
 
 print(f"Вы {warrior.gender} {warrior.name} {warrior.style}, недавно вами было взято задание - отправиться в жуткое подземелье ради спасения дочери императора, похищенной злым некромантом")
 def ploshad():
@@ -122,13 +169,100 @@ def item():
             print("На ваших ногах", botinky1)
     if len(inventory_gg) > 20:
         print(inventory_gg)
-        print("Нужно выкинуть лишний хлам")        
-    
+        print("Нужно выкинуть лишний хлам")  
+        
+def haracter(item_number):
+     print(warrior.damage_gg)
+     if item_number == 0:
+         damage_mech = warrior.damage_gg + random.randint(1,1)
+         print(damage_mech)
+         blood = random.randint(1,20)
+         #if blood == 1:
+             #warrior.damage_gg = warrior.damage_gg + 1 move (3)
+     if item_number == 1:
+         damage_bulava = warrior.damage_gg + random.randint(1,1)
+         stun = random.randint(1,20)
+         print(damage_bulava)
+        # if stun == 1:
+             #not monster.damage
+     if item_number == 2:
+         damage_klinok = warrior.damage_gg + random.randint(2,2)
+         print(damage_klinok)
+     if item_number == 3:
+         damage_molotok = warrior.damage_gg + random.randint(1,1)
+         stun = random.randint(1,20)
+         print(damage_molotok)
+         #if stun == 1:
+             #not monstet.damage
+     if item_number == 4:
+         defense_gg = 1
+         shans_bloka = random.randint(1,20)
+         print(defense_gg)
+         #if shans_bloka == 1:
+             #not monster.damage
+     if item_number == 5:
+         damage_palka = warrior.damage_gg + random.randint(1,1)
+         shans_magic = random.randint(1,2)
+         if shans_magic == 1:
+             damage_palka = warrior.damage_gg + random.randint(2,5)
+         print(damage_palka)
+     if item_number == 6:
+         damage_luk = warrior.damage_gg + random.randint(3,3)  
+         promax = random.randint(1,2)
+         if promax == 1:
+             not warrior.damage_gg
+         print(damage_luk)  
+
+        
 def tavern():
     print('\nВойдя в таверну, вас одурманивает запах шипящей газировки, однако вы концентрируетесь на посетителях таверны, и вам на глаза попадаются пару столиков, \
 за одним из которых сидит маленький полуослик McGregor, за тем же столом сидит мускулистый орк-воин Пушистая лапка, за другим столом сидит угрюмая магичка Улыбка, \
 и эльфика-лучница Слепота')
-    input("Вы знакомитесь с: |1| полуослик McGregor(Цена 10), |2| орком-воином Пушистой лапкой(Цена 15), |3| магичкой Улыбкой (Цена 15), эльфийкой-лучницей Слепота(Цена 15)")
+    sput = input("Вы знакомитесь с: |1| полуослик McGregor(Цена 10), |2| орком-воином Пушистой лапкой(Цена 15), |3| магичкой Улыбкой (Цена 15), эльфийкой-лучницей Слепота(Цена 15) |5| выход на площадь")
+    if sput == "1":
+        if mc in warrior.group:
+            print("У вас уже есть полуослик! Вы не осилите двоих!")
+            return tavern()
+        warrior.group.append(mc)
+        for friends in warrior.group:
+            if friends == mc:
+                print("Теперь с вами настоящий, говорящий полуослик", mc.name_mc)
+                warrior.wallet -= 10
+                print("В кошельке", warrior.wallet)
+    if sput == "2":
+        if paw in warrior.group:
+            print("У вас уже есть Лапка! Слишком пушисто!")
+            return tavern()
+        warrior.group.append(paw)
+        for friends in warrior.group:
+            if friends == paw:
+                print("Теперь у вас есть кого погладить", paw.name_paw)
+                warrior.wallet -= 15
+                print("В кошельке", warrior.wallet)
+    if sput == "3":
+        if smile in warrior.group:
+            print("У вас уже есть Улыбка! Вы слишком счастливы!")
+            return tavern()
+        warrior.group.append(smile)
+        for friends in warrior.group:
+            if friends == smile:
+                print("Теперь вам будет весело с такой компанией", smile.name_smile)
+                warrior.wallet -= 15
+                print("В кошельке", warrior.wallet)
+    if sput == "4":
+        if cecity in warrior.group:
+            print("У вас уже есть Слепота! Вы точны, как никогда!")
+            return tavern()
+        warrior.group.append(cecity)
+        for friends in warrior.group:
+            if friends == cecity:
+                print("С таким выбором, вы не промахнулись", cecity.name_cecity)
+                warrior.wallet -= 15
+                print("В кошельке", warrior.wallet)
+    if sput == "5":
+       return ploshad()
+        
+       
 
 def weapon_magazin(): 
     while True:
@@ -158,6 +292,8 @@ def weapon_magazin():
         if item_number == 6:
             print("Не факт что попадешь с ним, если конечно не бить им")
             print("Оружие дает: урон 3, шанс промоха 50%")
+        if item_number == 7:
+            return ploshad()
     # словарь для всех возможных предметов
         categories = {
             "Тупой меч": warrior.oruhie1,
@@ -185,6 +321,7 @@ def weapon_magazin():
 
         # блок если хотим надеть
         if decision == "д":
+            haracter(item_number)   
             # если на персонаже уже что-то надето
             if len(categories[item_name]) > 0:
                 # забираем у персонажа текущий предмет
@@ -231,4 +368,3 @@ while True:
         dangeon()
     if b == "i":
         item()
-        
