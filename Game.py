@@ -4,11 +4,14 @@ class GG:
     name = ""
     gender = ""
     style = ""
+    
     hp_gg = 0
     damage_gg = 5
     defense_gg = 0
+    
     agility_gg = 0
     critical_gg = 0
+    blok_gg = 0
     
     shlem1 = []
     oruhie1 = []
@@ -126,12 +129,16 @@ def item():
 
     for i in shlem:
         if i == hochu_nadet:
+           if len(warrior.shlem1) > 0:
+               warrior.inventory_gg.append(warrior.shlem1[0])
            shlem1.clear()
            shlem1.append(hochu_nadet)
            print("На вашей голове", shlem1)
        
     for i in amulet:
         if i == hochu_nadet:
+           if len(warrior.amulet1) > 0:
+               warrior.inventory_gg.append(warrior.amulet1[0])
            amulet1.clear()
            amulet1.append(hochu_nadet)
            print("На вашей шее сияет", amulet1)
@@ -146,24 +153,32 @@ def item():
         
     for i in shit:
         if i == hochu_nadet:
+            if len(warrior.shit1) > 0:
+                warrior.inventory_gg.append(warrior.shit1[0])
             shit1.clear()
             shit1.append(hochu_nadet)
             print("В левой руке", shit1)
         
     for i in persten:
         if i == hochu_nadet:
+            if len(warrior.persten1) > 0:
+                warrior.inventory_gg.append(warrior.persten1[0])
             persten1.clear()
             persten1.append(hochu_nadet)
             print("На вашей руке сияет", persten1)
 
     for i in kirasa:
        if i == hochu_nadet:
+           if len(warrior.kirasa1) > 0:
+               warrior.inventory_gg.append(warrior.kirasa1[0])
            kirasa1.clear()
            kirasa1.append(hochu_nadet)
            print("На вас", kirasa1)
        
     for i in botinky:
         if i == hochu_nadet:
+            if len(warrior.botinky1) > 0:
+                warrior.inventory_gg.append(warrior.botinky1[0])
             botinky1.clear()
             botinky1.append(hochu_nadet)
             print("На ваших ногах", botinky1)
@@ -171,33 +186,33 @@ def item():
         print(inventory_gg)
         print("Нужно выкинуть лишний хлам")  
         
-def haracter(item_number):
-     print(warrior.damage_gg)
+def haracter_weapon(item_number):
+     print("Урон игрока", warrior.damage_gg)
      if item_number == 0:
          damage_mech = warrior.damage_gg + random.randint(1,1)
-         print(damage_mech)
+         print("Урон игрока с мечом", damage_mech)
          blood = random.randint(1,20)
          #if blood == 1:
              #warrior.damage_gg = warrior.damage_gg + 1 move (3)
      if item_number == 1:
          damage_bulava = warrior.damage_gg + random.randint(1,1)
          stun = random.randint(1,20)
-         print(damage_bulava)
+         print("Урон игрока с булавой", damage_bulava)
         # if stun == 1:
              #not monster.damage
      if item_number == 2:
          damage_klinok = warrior.damage_gg + random.randint(2,2)
-         print(damage_klinok)
+         print("Урон игрока с клинком", damage_klinok)
      if item_number == 3:
          damage_molotok = warrior.damage_gg + random.randint(1,1)
          stun = random.randint(1,20)
-         print(damage_molotok)
+         print("Урон игрока с молотком", damage_molotok)
          #if stun == 1:
              #not monstet.damage
      if item_number == 4:
          defense_gg = 1
          shans_bloka = random.randint(1,20)
-         print(defense_gg)
+         print("Защита игрока", defense_gg)
          #if shans_bloka == 1:
              #not monster.damage
      if item_number == 5:
@@ -205,14 +220,63 @@ def haracter(item_number):
          shans_magic = random.randint(1,2)
          if shans_magic == 1:
              damage_palka = warrior.damage_gg + random.randint(2,5)
-         print(damage_palka)
+         print("Урон игрока с волшебной палочкой", damage_palka)
      if item_number == 6:
          damage_luk = warrior.damage_gg + random.randint(3,3)  
          promax = random.randint(1,2)
          if promax == 1:
              not warrior.damage_gg
-         print(damage_luk)  
-
+         print("Урон игрока с луком", damage_luk)  
+         
+def haracter_armor(vibor):
+    print("Защита игрока: ", warrior.defense_gg)
+    print("Жизнь игрока: ", warrior.hp_gg)
+    if vibor == 0:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 2
+        print("Защита игрока с шлемом", warrior.defense_gg)
+        print("Жизнь игрока с шлемом", warrior.hp_gg)
+    if vibor == 1:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 5
+        print("Защита игрока с накидкой", warrior.defense_gg)
+        print("Жизнь игрока с накидкой", warrior.hp_gg)
+    if vibor == 2:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 2
+        print("Защита игрока в сапогах", warrior.defense_gg)
+        print("Жизнь игрока в сапогах", warrior.hp_gg)
+    if vibor == 3:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 3
+        print("Защита игрока с шлемом", warrior.defense_gg)
+        print("Жизнь игрока с шлемом", warrior.hp_gg)
+    if vibor == 4:
+        warrior.defense_gg += 2
+        warrior.hp_gg += 10
+        print("Защита игрока в доспехе", warrior.defense_gg)
+        print("Жизнь игрока в доспехе", warrior.hp_gg)
+    if vibor == 5:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 3
+        print("Защита игрока в сапогах", warrior.defense_gg)
+        print("Жизнь игрока в сапогах", warrior.hp_gg)
+    if vibor == 6:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 2
+        print("Защита игрока с маской", warrior.defense_gg)
+        print("Жизнь игрока с маской", warrior.hp_gg)
+    if vibor == 7:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 5
+        print("Защита игрока в доспехе", warrior.defense_gg)
+        print("Жизнь игрока в доспехе", warrior.hp_gg)
+    if vibor == 8:
+        warrior.defense_gg += 1
+        warrior.hp_gg += 2
+        print("Защита игрока в сандалях", warrior.defense_gg)
+        print("Жизнь игрока в сандалях", warrior.hp_gg)
+        
         
 def tavern():
     print('\nВойдя в таверну, вас одурманивает запах шипящей газировки, однако вы концентрируетесь на посетителях таверны, и вам на глаза попадаются пару столиков, \
@@ -266,6 +330,9 @@ def tavern():
 
 def weapon_magazin(): 
     while True:
+        print('\nВойдя в магазин оружия, вы не видите карлика за прилавком, но он там есть. Подойдя ближе и осмотривая витрины, вы наконец-то пнули его и обратили \
+на него внимание. Вы на секунду подумали, что это боевой гном и создает высококачественное вооружение, но нет, это оказался просто карлик, а поняли вы это, потому, \
+как он отлетел от вашего пинка. Отряхиваясь, он сказал вам: Добро пожаловать ')
         weapon = ['Тупой меч', 'Булава со сколами', 'Маленький клинок', 'Молоток', 'Деревяный щит с дырами', 'Волшебная палочка', 'Кривой лук']
         weapon1 = [5,5,5,5,5,5,5]
         print("Чтобы вы хотели купить?")
@@ -321,7 +388,7 @@ def weapon_magazin():
 
         # блок если хотим надеть
         if decision == "д":
-            haracter(item_number)   
+            haracter_weapon(item_number)   
             # если на персонаже уже что-то надето
             if len(categories[item_name]) > 0:
                 # забираем у персонажа текущий предмет
@@ -352,8 +419,113 @@ def weapon_magazin():
         if exit == "д":
             ploshad()
         if exit == "н":
-            weapon_magazin()         
+            weapon_magazin()       
+            
+def armor_magazin():
+    while True:
+        print('\nВойдя в магазин доспехов, вы увидели девушку, которая падает с лесницы, пытаясь ухватиться хоть за что-то, она роняет на себя ещё и коробки с витрин.Немного подождав, чтобы понять остался кто-нибудь в магазине живой, кроме вас. Вы услышали зов о помощи. Вы  подошли и начали раставлять коробки обратно по местам витрины, случайно закинув на полку девушку на которой был одет тяжелый доспех, видимо во время падения.Вы извинились и вытряхнули девушку из доспеха. Девушка сказала: Спасибо, мы всегда рады новым покупателям.')
+        armor = ['Кожаный шлем', 'Кожаная накидка','Кожаные сапоги', 'Деревяный шлем','Деревяный доспех','Деревяные сапоги','Железная маска','Пластинчитый доспех','Полу-железные сандали']
+        armor1 = [5,10,5,5,10,5,5,10,5]
+        print("Чтобы вы хотели купить?")
+        vibor = int(input("Что вы выберете: |0| Кожаный шлем, |1| Кожаная накидка, |2| Кожаные сапоги, |3| Деревяный шлем, |4| Деревяный доспех, |5| Деревяные сапоги, |6| Железная маска, |7| Пластинчитый доспех, |8| Полу-железные сандали, |9| Выход"))
+        
+        if vibor == 0:
+            print("Иногда уносит ветром")
+            print("Характеристики шлема : защита 1, hp 2")
+            print("Бонус комплекта(шлем, накидка,сапоги) = 5% шанс уворота")
+        if vibor == 1: 
+            print("Если не боитесь холода, она хорошо продувается")
+            print("Характеристики накидки: защита 1, hp 5")
+            print("Бонус комплекта(шлем, накидка,сапоги из кожи) = 5% шанс уворота")
+        if vibor == 2:
+            print("Застревают в грязи, ходите по подземелью")
+            print("Характеристики сапог: защита 1, hp 2")
+            print("Бонус комплекта(шлем, накидка,сапоги) = 5% шанс уворота")
+        if vibor == 3:
+            print("Дуб для дуба, давит на мозг")
+            print("Характеристики шлема: защита 1, hp 3")
+            print("Бонус комплекта(шлем, доспех,сапоги из дерева) = защита 1, шанс блока 5%, минус 10% шанс уворота, минус 5% шанс крита")
+        if vibor == 4:
+            print("Легко воспламеням, не курить в нем")
+            print("Характеристики доспеха: защита 2, hp 10")
+            print("Бонус комплекта(шлем, доспех,сапоги из дерева) = защита 1, шанс блока 5%, минус 10% шанс уворота, минус 5% шанс крита")
+        if vibor == 5:
+            print("Ходит молва, что вы можете прирости к земле")
+            print("Характеристики сапог: защита 1, hp 3")
+            print("Бонус комплекта(шлем, доспех,сапоги из дерева) = защита 1, шанс блока 5%, минус 10% шанс уворота, минус 5% шанс крита")
+        if vibor == 6:
+            print("Не смотрите в зеркало - испугаетесь")
+            print("Характеристики маски: защита 1, hp 2")
+            print("Бонус комплекта(маска, доспех,сандали из пластин) крит шанс 5%")
+        if vibor == 7:
+           print("Не особо защищает, но можете драться им") 
+           print("Характеристики доспеха: защита 1, hp 5")
+           print("Бонус комплекта(маска, доспех,сандали из пластин) крит шанс 5%")
+        if vibor == 8:
+            print("Не цепляйте землю, унесете с собой")
+            print("Характеристики сандаль: защита 1, hp 2")
+        if vibor == 9:
+            return ploshad()
+            
+        categories1 = {
+            "Кожаный шлем": warrior.shlem1,
+            "Кожаная накидка": warrior.kirasa1,
+            "Кожаные сапоги": warrior.botinky1,
+            "Деревяный шлем": warrior.shlem1, 
+            "Деревяный доспех": warrior.kirasa1,
+            "Деревяные сапоги": warrior.botinky1,
+            "Железная маска": warrior.shlem1,
+            "Пластинчитый доспех": warrior.kirasa1,
+            "Полу-железные сандали": warrior.botinky1
+            }
+            
+        v = input("Хотите ли купить это? д/н")
+        if v == "д":
+        # добавляем в инвентарь то, что купили
+            warrior.wallet = warrior.wallet - armor1[vibor]
+            print(warrior.wallet)
+            warrior.inventory_gg.append(armor[vibor])
+        if v == "н":
+            return armor_magazin()
+        # выясняем как это называется
+        item_name1 = armor[vibor]
+        print("Сейчас в инвентаре после покупки  предмета:", warrior.inventory_gg)
+        decision = input("Хотите надеть? д/н\n")
 
+        # блок если хотим надеть
+        if decision == "д":
+            haracter_armor(vibor)   
+            # если на персонаже уже что-то надето
+            if len(categories1[item_name1]) > 0:
+                # забираем у персонажа текущий предмет
+                 old_item1 = categories1[item_name1].pop()
+                # кладем его обратно в инвентарь
+                 warrior.inventory_gg.append(old_item1)
+                # даем персонажу новый предмет
+                 categories1[item_name1].append(armor[vibor])
+
+                # ищем индекс предмета в инвентаре, который мы надели
+                 item_name1 = armor[vibor]
+                 item_index1 = warrior.inventory_gg.index(item_name1)
+                # убираем его из инвентаря
+                 warrior.inventory_gg.pop(item_index1)
+
+                 print("На персонаже:", categories1[item_name1])
+                 print("В инвентаре:", warrior.inventory_gg)
+            # если на персонаже ничего нет
+            else:
+                 categories1[item_name1].append(armor[vibor])
+                 warrior.inventory_gg.pop()
+                 print("На персонаже:", categories1[item_name1])
+                 print("В инвентаре:", warrior.inventory_gg)
+        else:
+             print("На персонаже:", categories1[item_name1])
+             print("В инвентаре:", warrior.inventory_gg)
+        exit = input("Хотите покинуть магазин? д/н")
+        if exit == "д":
+            ploshad()
+        if exit == "н":
+            armor_magazin()       
 while True:
     b = ploshad()
     if b == "1":
