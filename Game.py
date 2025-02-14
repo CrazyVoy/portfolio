@@ -277,6 +277,35 @@ def haracter_armor(vibor):
         print("Защита игрока в сандалях", warrior.defense_gg)
         print("Жизнь игрока в сандалях", warrior.hp_gg)
         
+def haracter_armor_minus():
+    if old_item1 == "Кожаный шлем":
+        warrior.hp_gg -= 2
+        warrior.defense_gg -= 1
+    if old_item1 == "Кожаная накидка":
+        warrior.hp_gg -= 5
+        wqrrior.defense_gg -= 1
+    if old_item == "Кожаные сапоги":
+        warrior.hp_gg -= 2
+        warrior.defense_gg -= 1
+    if old_item1 == "Деревяный шлем":
+        warrior.hp_gg -= 3
+        warrior.defense_gg -= 1
+    if old_item1 == "Деревяный доспех":
+        warrior.hp_gg -= 10
+        warrior.defense_gg -= 2
+    if old_item1 == "Деревяные сапоги":
+        warrior.hp_gg -= 3
+        warrior.defense_gg -= 1
+    if old_item1 == "Железная маска":
+        warrior.hp_gg -= 2
+        warrior.defense_gg -= 1
+    if old_item1 == "Пластинчитый доспех":
+        warrior.hp_gg -= 5
+        warrior.defense_gg -= 1
+    if old_item1 == "Полу-железные сандали":
+        warrior.hp_gg -= 2
+        print("Вычет", warrior.hp_gg)
+        warrior.defense_gg -= 1
         
 def tavern():
     print('\nВойдя в таверну, вас одурманивает запах шипящей газировки, однако вы концентрируетесь на посетителях таверны, и вам на глаза попадаются пару столиков, \
@@ -499,6 +528,7 @@ def armor_magazin():
             if len(categories1[item_name1]) > 0:
                 # забираем у персонажа текущий предмет
                  old_item1 = categories1[item_name1].pop()
+                 print(old_item1)
                 # кладем его обратно в инвентарь
                  warrior.inventory_gg.append(old_item1)
                 # даем персонажу новый предмет
@@ -509,7 +539,6 @@ def armor_magazin():
                  item_index1 = warrior.inventory_gg.index(item_name1)
                 # убираем его из инвентаря
                  warrior.inventory_gg.pop(item_index1)
-
                  print("На персонаже:", categories1[item_name1])
                  print("В инвентаре:", warrior.inventory_gg)
             # если на персонаже ничего нет
