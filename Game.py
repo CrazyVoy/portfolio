@@ -96,6 +96,9 @@ if user_style == "Маг":
     warrior.critical_gg = 2
     warrior.defense_gg = -1
 
+
+hp_posle = warrior.hp_gg
+
 print(f"Вы {warrior.gender} {warrior.name} {warrior.style}, недавно вами было взято задание - отправиться в жуткое подземелье ради спасения дочери императора, похищенной злым некромантом")
 def ploshad():
     print('\nВы вышли на площадь города')
@@ -228,63 +231,46 @@ def haracter_weapon(item_number):
              not warrior.damage_gg
          print("Урон игрока с луком", damage_luk)  
          
-def haracter_armor(vibor):
-    print("Защита игрока: ", warrior.defense_gg)
-    print("Жизнь игрока: ", warrior.hp_gg)
+def haracter_armor(vibor):    
+    print("Жизнь героя:", warrior.hp_gg)
+    print("Защита героя:", warrior.defense_gg)
     if vibor == 0:
         warrior.defense_gg += 1
         warrior.hp_gg += 2
-        print("Защита игрока с шлемом", warrior.defense_gg)
-        print("Жизнь игрока с шлемом", warrior.hp_gg)
     if vibor == 1:
         warrior.defense_gg += 1
         warrior.hp_gg += 5
-        print("Защита игрока с накидкой", warrior.defense_gg)
-        print("Жизнь игрока с накидкой", warrior.hp_gg)
     if vibor == 2:
         warrior.defense_gg += 1
         warrior.hp_gg += 2
-        print("Защита игрока в сапогах", warrior.defense_gg)
-        print("Жизнь игрока в сапогах", warrior.hp_gg)
     if vibor == 3:
         warrior.defense_gg += 1
         warrior.hp_gg += 3
-        print("Защита игрока с шлемом", warrior.defense_gg)
-        print("Жизнь игрока с шлемом", warrior.hp_gg)
     if vibor == 4:
         warrior.defense_gg += 2
         warrior.hp_gg += 10
-        print("Защита игрока в доспехе", warrior.defense_gg)
-        print("Жизнь игрока в доспехе", warrior.hp_gg)
     if vibor == 5:
         warrior.defense_gg += 1
         warrior.hp_gg += 3
-        print("Защита игрока в сапогах", warrior.defense_gg)
-        print("Жизнь игрока в сапогах", warrior.hp_gg)
     if vibor == 6:
         warrior.defense_gg += 1
         warrior.hp_gg += 2
-        print("Защита игрока с маской", warrior.defense_gg)
-        print("Жизнь игрока с маской", warrior.hp_gg)
     if vibor == 7:
         warrior.defense_gg += 1
         warrior.hp_gg += 5
-        print("Защита игрока в доспехе", warrior.defense_gg)
-        print("Жизнь игрока в доспехе", warrior.hp_gg)
     if vibor == 8:
         warrior.defense_gg += 1
         warrior.hp_gg += 2
-        print("Защита игрока в сандалях", warrior.defense_gg)
-        print("Жизнь игрока в сандалях", warrior.hp_gg)
         
-def haracter_armor_minus():
+        
+def haracter_armor_minus(old_item1):
     if old_item1 == "Кожаный шлем":
         warrior.hp_gg -= 2
         warrior.defense_gg -= 1
     if old_item1 == "Кожаная накидка":
         warrior.hp_gg -= 5
         wqrrior.defense_gg -= 1
-    if old_item == "Кожаные сапоги":
+    if old_item1 == "Кожаные сапоги":
         warrior.hp_gg -= 2
         warrior.defense_gg -= 1
     if old_item1 == "Деревяный шлем":
@@ -304,9 +290,79 @@ def haracter_armor_minus():
         warrior.defense_gg -= 1
     if old_item1 == "Полу-железные сандали":
         warrior.hp_gg -= 2
-        print("Вычет", warrior.hp_gg)
         warrior.defense_gg -= 1
+             
+def bonus():
+    # Проверяем, есть ли все элементы экипировки
+    koh_full_set = (
+        "Кожаный шлем" in warrior.shlem1 and
+        "Кожаная накидка" in warrior.kirasa1 and
+        "Кожаные сапоги" in warrior.botinky1
+    )
+
+    # Если все элементы надеты и бонус еще не добавлен
+    if koh_full_set and not hasattr(warrior, 'bonus_applied'):
+        warrior.agility_gg += 1
+        warrior.bonus_applied = True  # Помечаем, что бонус добавлен
+        print("Бонус добавлен, ловкость героя:", warrior.agility_gg)
+
+    # Если хотя бы один элемент снят и бонус был добавлен
+    elif not koh_full_set and hasattr(warrior, 'bonus_applied'):
+        warrior.agility_gg -= 1
+        del warrior.bonus_applied  # Убираем отметку о добавленном бонусе
+        print("Бонус убран, ловкость героя:", warrior.agility_gg)
         
+     # Проверяем, есть ли все элементы экипировки
+    der_full_set = (
+        "Деревяный шлем" in warrior.shlem1 and
+        "Деревяный доспех" in warrior.kirasa1 and
+        "Деревяные сапоги" in warrior.botinky1
+    )
+
+    # Если все элементы надеты и бонус еще не добавлен
+    if der_full_set and not hasattr(warrior, 'bonus_applied1'):
+        warrior.blok_gg += 1
+        warrior.defense_gg += 1
+        warrior.agility_gg -= 2
+        warrior.critical_gg -= 1
+        warrior.bonus_applied1 = True  # Помечаем, что бонус добавлен
+        print("Бонус добавлен, блок героя:", warrior.blok_gg)
+        print("Бонус добавлен, защита героя:", warrior.defense_gg)
+        print("Бонус добавлен, ловкость героя:", warrior.agility_gg)
+        print("Бонус добавлен, крит героя:", warrior.critical_gg)
+
+    # Если хотя бы один элемент снят и бонус был добавлен
+    elif not der_full_set and hasattr(warrior, 'bonus_applied1'):
+        warrior.blok_gg -= 1
+        warrior.defense_gg -= 1
+        warrior.agility_gg += 2
+        warrior.critical_gg += 1
+        del warrior.bonus_applied1 # Убираем отметку о добавленном бонусе
+        print("Бонус убран, блок героя:", warrior.blok_gg)
+        print("Бонус убран, защита героя:", warrior.defense_gg)
+        print("Бонус убран, ловкость героя:", warrior.agility_gg)
+        print("Бонус убран, крит героя:", warrior.critical_gg)
+        
+    # Проверяем, есть ли все элементы экипировки
+    zhel_full_set = (
+        "Железная маска" in warrior.shlem1 and
+        "Пластинчитый доспех" in warrior.kirasa1 and
+        "Полу-железные сандали" in warrior.botinky1
+    )
+
+    # Если все элементы надеты и бонус еще не добавлен
+    if zhel_full_set and not hasattr(warrior, 'bonus_applied2'):
+        warrior.critical_gg += 1
+        warrior.bonus_applied2 = True  # Помечаем, что бонус добавлен
+        print("Бонус добавлен, крит героя:", warrior.critical_gg)
+
+    # Если хотя бы один элемент снят и бонус был добавлен
+    elif not zhel_full_set and hasattr(warrior, 'bonus_applied2'):
+        warrior.critical_gg -= 1
+        del warrior.bonus_applied2  # Убираем отметку о добавленном бонусе
+        print("Бонус убран, крит героя:", warrior.critical_gg)
+    
+             
 def tavern():
     print('\nВойдя в таверну, вас одурманивает запах шипящей газировки, однако вы концентрируетесь на посетителях таверны, и вам на глаза попадаются пару столиков, \
 за одним из которых сидит маленький полуослик McGregor, за тем же столом сидит мускулистый орк-воин Пушистая лапка, за другим столом сидит угрюмая магичка Улыбка, \
@@ -449,7 +505,7 @@ def weapon_magazin():
             ploshad()
         if exit == "н":
             weapon_magazin()       
-            
+
 def armor_magazin():
     while True:
         print('\nВойдя в магазин доспехов, вы увидели девушку, которая падает с лесницы, пытаясь ухватиться хоть за что-то, она роняет на себя ещё и коробки с витрин.Немного подождав, чтобы понять остался кто-нибудь в магазине живой, кроме вас. Вы услышали зов о помощи. Вы  подошли и начали раставлять коробки обратно по местам витрины, случайно закинув на полку девушку на которой был одет тяжелый доспех, видимо во время падения.Вы извинились и вытряхнули девушку из доспеха. Девушка сказала: Спасибо, мы всегда рады новым покупателям.')
@@ -524,11 +580,13 @@ def armor_magazin():
         # блок если хотим надеть
         if decision == "д":
             haracter_armor(vibor)   
+     
             # если на персонаже уже что-то надето
             if len(categories1[item_name1]) > 0:
                 # забираем у персонажа текущий предмет
+                 
                  old_item1 = categories1[item_name1].pop()
-                 print(old_item1)
+                 haracter_armor_minus(old_item1)
                 # кладем его обратно в инвентарь
                  warrior.inventory_gg.append(old_item1)
                 # даем персонажу новый предмет
@@ -539,22 +597,168 @@ def armor_magazin():
                  item_index1 = warrior.inventory_gg.index(item_name1)
                 # убираем его из инвентаря
                  warrior.inventory_gg.pop(item_index1)
+                 bonus()
                  print("На персонаже:", categories1[item_name1])
+                 print("Жизнь героя :", warrior.hp_gg)
+                 print("Защита героя:", warrior.defense_gg)
                  print("В инвентаре:", warrior.inventory_gg)
             # если на персонаже ничего нет
             else:
                  categories1[item_name1].append(armor[vibor])
                  warrior.inventory_gg.pop()
+                 bonus()
                  print("На персонаже:", categories1[item_name1])
+                 print("Жизнь героя :", warrior.hp_gg)
+                 print("Защита героя:", warrior.defense_gg)
                  print("В инвентаре:", warrior.inventory_gg)
         else:
+             bonus()
              print("На персонаже:", categories1[item_name1])
+             print("Жизнь героя :", warrior.hp_gg)
+             print("Защита героя:", warrior.defense_gg)
              print("В инвентаре:", warrior.inventory_gg)
         exit = input("Хотите покинуть магазин? д/н")
         if exit == "д":
             ploshad()
         if exit == "н":
-            armor_magazin()       
+            armor_magazin()   
+                
+            
+def potion_factory():
+    print('\nВойдя в зельеварню вы увидели алхимика который что-то добавляет в котел и превращается в жабу, которая что-то добавляет в котел и получается взрыв, от взрыва вылетает кролик в вас, вы его хватаете и пытаетесь запихнуть в рюкзак, но вас просят отдать кролика. Вы его отдаете, жаба-алхимик кидает его в котел и становится обратно алхимиком, который вам говорит: Вы что-то хотели? Всех сварим.')
+    potion = ["Малое зелье жизни"]
+    potion1 = [2]
+    pokupka_potion = int(input("Что вы выберете: |0| Малое зелье жизни(25хп) - стоимость 2, |1| Выход"))
+    
+    if pokupka_potion == 0:
+        warrior.inventory_gg.append(potion[0])
+        warrior.wallet -= potion1[0]
+        print("В вашем кошельке:", warrior.wallet)
+        print("В вашем рюкзаке",warrior.inventory_gg)
+        use = input("Выпить сейчас? д/н")
+        if use == "д":
+            new_hp = hp_posle + 25
+            if new_hp > warrior.hp_gg:
+                new_hp = warrior.hp_gg
+            item_name2 = potion[pokupka_potion]
+            item_index2 = warrior.inventory_gg.index(item_name2)
+            warrior.inventory_gg.pop(item_index2)
+            print("Жизнь героя:", new_hp)
+            print("В вашем рюкзаке:", warrior.inventory_gg)
+            return potion_factory()
+        if use == "н":
+            print("В вашем рюкзаке",warrior.inventory_gg)
+            return potion_factory()
+    if pokupka_potion == 1:
+        return ploshad()
+        
+        
+def dangeon():
+    print("Наконец-то проделав огромный путь, среди 3 магазинов и 1 таверны, вы собрались с силами всех возможных Богов, и встали перед огромными вратами подземелья. Вы полны решимости, готовы вынести любые испытания, и встретиться лицом к лицу с самой Смертью! Правда в таверне города. Ну что ж, вы всё ещё можете отступить, прежде чем ступите на путь страданий.")
+    pobeg = input("Вы хотите сбежать? д/н")
+    if pobeg == "д":
+        return ploshad()
+    if pobeg == "н":
+        return one_storey()
+
+def battle():
+    monsters = [
+        {"name": "крыса-людоед", "hp": 30, "damage": (1, 5)},
+        {"name": "гоблин", "hp": 20, "damage": (2, 4)},
+        {"name": "гоблин-шаман", "hp": 15, "damage": (3, 6)},
+        {"name": "гоблин-воин", "hp": 25, "damage": (4, 7)},
+        {"name": "крыса", "hp": 10, "damage": (1, 3)},
+        {"name": "крыса-мутант", "hp": 35, "damage": (2, 6)}
+    ]
+    
+    # Выбираем случайного монстра
+    monster = random.choice(monsters)
+    print(f"Вы встретили {monster['name']}!")
+    
+    
+    # Бой
+    while True:
+        # Ход игрока
+        damage = random.randint(*warrior.damage_gg)
+        # damage = random.randint(warrior.damage[0],warrior.damage[1])
+        monster['hp'] -= damage
+        print(f"Вы нанесли {damage} урона! У монстра осталось {max(0, monster['hp'])} HP")
+        
+        if monster['hp'] <= 0:
+            print(f"Вы победили {monster['name']}!")
+            break
+            
+        # Ход монстра
+        damage = random.randint(*monster['damage'])
+        warrior.hp_gg -= damage
+        print(f"{monster['name']} нанес вам {damage} урона! У вас осталось {max(0, player_hp)} HP")
+        
+        if player_hp <= 0:
+            print("Вы проиграли...")
+            break
+
+# Запуск битвы
+battle()
+           
+def one_storey():
+    print("Вы заходите на первый ярус подземелья, и перед вами ничем не примечательная во всех отношениях глубина пещеры, вокруг сплошной камень, песок и темнота... Хоть где-то, но и светятся тускло факелы, освещая дорогу. Добро пожаловать")
+    pohod = random.randint(1,100)
+    print(pohod)
+    if 10 > pohod:
+        return two_storey()
+    if 35 > pohod:
+        sunduk = input("Долго блуждая по комнатам бесконечного, как вам кажеться, лабиринта подземелья, вы наткнулись на сундук, хотите ли его открыть? д/н")
+        if sunduk == "д":
+            sunduk1 = random.randint(1,2)
+            if sunduk1 == 1:
+                sunduk2 = random.randint(1,3)
+                item_sunduk = ["Дубинка гоблина", "Крысиный хвост", "Щит гоблина", "Амулет гоблина-шамана","Амулет гоблина из зубов", "Обычное кольцо", "Деньги"]           
+                for a in range (sunduk2):
+                    loot = random.randint(0,6)
+                    warrior.inventory_gg.append(item_sunduk[loot])
+                    
+                    if loot == 6:
+                        warrior.wallet += random.randint(1,10)
+                        print("В кошельке", warrior.wallet)
+                        warrior.inventory_gg.remove("Деньги")
+            if sunduk1 == 2:
+                lovushka = random.randint(1,3)
+                if lovushka == 1:
+                    print("Вы попытались открыть сундук, но он никак не поддавался. Вы решили применить силу, и случайно порезались об крышку сундука")
+                    warrior.hp_gg -= 1
+                    print("Жизнь героя", warrior.hp_gg)
+                if lovushka == 2:
+                    print("Вы попытались открыть сундук, но он никак не поддавался. Вы решили с помощью оружия, сделать рычаг для открытия сундука, но у вас этот шанс с треском провалился и вы травмировались")
+                    warrior.hp_gg -= 3
+                    print("Жизнь героя", warrior.hp_gg)
+                if lovushka == 3:
+                    print("Вы попытались открыть сундук, но он никак не поддавался. Вы с яростью замахнулись оружием и направили всю злость на сундук, но оружие отскочило вам в ногу, вы ранены!")
+                    warrior.hp_gg -= 5
+                    print("Жизнь героя", warrior.hp_gg)
+        print("В рюкзаке:", warrior.inventory_gg)
+    if 60 > pohod:
+        sobitie = random.randint(1,1)
+        print(sobitie)
+        if sobitie == 1:
+            sobitie_s_krisoy = int(input("Вы в далеке видете гигантскую крысу, которая до сих пор, пока ещё не заметила вас. Чтобы вы захотели бы сделать? 0 = подойти и дать ей предмет, 1 = напасть сзади, чтобы застать в расплох, 2 = уйти, пока она вас не заметила."))
+            if sobitie_s_krisoy == 0:
+
+# Вывод списка с нумерацией (индексы начинаются с 0)
+                for index, value in enumerate(warrior.inventory_gg):
+                    otdal = print(f"{index}. {value}")
+                otdal1 = int(input("Какой предмет вы хотите отдать?"))
+                del warrior.inventory_gg[otdal1]
+                if warrior.inventory_gg == []:
+                    return battle
+                #warrior.inventory_gg.remove[]
+                    
+                
+            
+ 
+def two_storey():
+        print()
+        
+        
 while True:
     b = ploshad()
     if b == "1":
@@ -569,3 +773,4 @@ while True:
         dangeon()
     if b == "i":
         item()
+                    
