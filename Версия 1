@@ -1,0 +1,1253 @@
+import random
+import time
+from collections import defaultdict
+
+class Hero:
+    def __init__(self):
+        self.name = "Герой"
+        self.max_hp = 100
+        self.hp = 100
+        self.base_min_dmg = 5
+        self.base_max_dmg = 10
+        self.dodge_chance = 5  # 5%
+        self.base_defense = 0
+        self.crit_chance = 5  # 5%
+        self.equipment = {
+            'weapon': None,
+            'shield': None,
+            'armor': None,
+            'boots': None,
+            'ring': None,
+            'amulet': None
+        }
+        self.active_effects = defaultdict(list)
+        self.inventory = []
+        self.gold = 0
+        self.xp = 0
+        self.level = 1
+        self.xp_to_level = 100
+        self.dungeon_keys = 0
+        self.current_dungeon_floor = 0
+        self.companions = []
+        self.available_companions = [
+            Companion("Воин", 50, 5, 10, 100),
+            Companion("Лучник", 40, 6, 12, 120),
+            Companion("Маг", 35, 8, 15, 150),
+            Companion("Лекарь", 45, 3, 6, 200),
+            Companion("Защитник", 70, 4, 8, 180)
+        ]
+        
+    @property
+    def min_dmg(self):
+        bonus = sum(effect.get('min_dmg', 0) for effects in self.active_effects.values() for effect in effects)
+        weapon_bonus = self.equipment['weapon'].stats['min_dmg'] if self.equipment['weapon'] else 0
+        return self.base_min_dmg + bonus + weapon_bonus
+    
+    @property
+    def max_dmg(self):
+        bonus = sum(effect.get('max_dmg', 0) for effects in self.active_effects.values() for effect in effects)
+        weapon_bonus = self.equipment['weapon'].stats['max_dmg'] if self.equipment['weapon'] else 0
+        return self.base_max_dmg + bonus + weapon_bonus
+    
+    @property
+    def defense(self):
+        bonus = sum(effect.get('defense', 0) for effects in self.active_effects.values() for effect in effects)
+        armor_bonus = self.equipment['armor'].stats['defense'] if self.equipment['armor'] else 0
+        boots_bonus = self.equipment['boots'].stats['defense'] if self.equipment['boots'] else 0
+        return self.base_defense + bonus + armor_bonus + boots_bonus
+    
+    @property
+    def dodge_chance_total(self):
+        bonus = sum(effect.get('dodge', 0) for effects in self.active_effects.values() for effect in effects)
+        boots_bonus = self.equipment['boots'].stats['dodge'] if self.equipment['boots'] else 0
+        return self.dodge_chance + bonus + boots_bonus
+    
+    @property
+    def crit_chance_total(self):
+        bonus = sum(effect.get('crit', 0) for effects in self.active_effects.values() for effect in effects)
+        ring_bonus = self.equipment['ring'].stats['crit'] if self.equipment['ring'] else 0
+        amulet_bonus = self.equipment['amulet'].stats['crit'] if self.equipment['amulet'] else 0
+        return self.crit_chance + bonus + ring_bonus + amulet_bonus
+    
+    def attack(self):
+        is_crit = random.randint(1, 100) <= self.crit_chance_total
+        damage = random.randint(self.min_dmg, self.max_dmg)
+        if is_crit:
+            damage += damage  # Удваиваем урон (добавляем к базовому)
+            print("Критический удар!")
+        return damage
+    
+    def take_damage(self, damage):
+        if random.randint(1, 100) <= self.dodge_chance_total:
+            print(f"{self.name} уклонился от атаки!")
+            return 0
+        
+        if self.equipment['shield']:
+            if random.randint(1, 100) <= self.equipment['shield'].block_chance:
+                print(f"{self.name} блокировал атаку щитом!")
+                damage = max(1, damage // 2)
+        
+        damage = max(1, damage - self.defense)
+        self.hp -= damage
+        return damage
+    
+    def update_effects(self):
+        expired_effects = []
+        for effect_name, effects in list(self.active_effects.items()):
+            for effect in effects[:]:
+                effect['duration'] -= 1
+                if effect['duration'] <= 0:
+                    expired_effects.append((effect_name, effect))
+        
+        for effect_name, effect in expired_effects:
+            
+            if effect_name in self.active_effects and effect in self.active_effects[effect_name]:
+                self.active_effects[effect_name].remove(effect)
+                print(f"Эффект {effect_name} закончился")
+    
+    def add_effect(self, name, duration, **stats):
+        self.active_effects[name].append({'duration': duration, **stats})
+        stat_changes = []
+        if 'min_dmg' in stats or 'max_dmg' in stats:
+            stat_changes.append(f"урон +{stats.get('min_dmg', stats.get('max_dmg', 0))}")
+        if 'dodge' in stats:
+            stat_changes.append(f"уворот +{stats['dodge']}%")
+        if 'defense' in stats:
+            stat_changes.append(f"защита +{stats['defense']}")
+        if 'crit' in stats:
+            stat_changes.append(f"крит +{stats['crit']}%")
+        
+        print(f"Получен эффект {name} на {duration} ходов: {', '.join(stat_changes)}")
+
+    def is_alive(self):
+        return self.hp > 0
+    
+    def heal(self, amount):
+        self.hp = min(self.max_hp, self.hp + amount)
+    
+    def add_item(self, item):
+        self.inventory.append(item)
+        print(f"Получен предмет: {item.name}")
+    
+    def equip_item(self, item):
+        if not item or item.type not in ['weapon', 'shield', 'armor', 'boots', 'ring', 'amulet']:
+            print("Нельзя экипировать этот предмет")
+            return False
+            
+        if item.required_level > self.level:
+            print(f"Для экипировки {item.name} требуется {item.required_level} уровень")
+            return False
+        
+        if item.slot not in self.equipment:
+            print(f"Нет слота для этого предмета: {item.slot}")
+            return False
+        
+        if self.equipment[item.slot]:
+            self.inventory.append(self.equipment[item.slot])
+        
+        self.equipment[item.slot] = item
+        if item in self.inventory:
+            self.inventory.remove(item)
+        
+        print(f"Экипировано: {item.name}")
+        return True
+    
+    def level_up(self):
+        self.level += 1
+        self.xp -= self.xp_to_level
+        self.xp_to_level *= 2
+        
+        print(f"\n=== {self.name} достиг {self.level} уровня! ===")
+        print("Выберите характеристику для улучшения:")
+        print("1. Сила (+1 к урону)")
+        print("2. Здоровье (+5 к максимальному HP)")
+        print("3. Защита (+1 к защите)")
+        print("4. Крит (+1% к шансу крита)")
+        print("5. Уворот (+1% к шансу уворота)")
+        
+        choice = input("Ваш выбор (1-5): ")
+        if choice == "1":
+            self.base_min_dmg += 1
+            self.base_max_dmg += 1
+            print("Сила увеличена! Урон +1")
+        elif choice == "2":
+            self.max_hp += 5
+            self.hp += 5
+            print("Здоровье увеличено! Максимальное HP +5")
+        elif choice == "3":
+            self.base_defense += 1
+            print("Защита увеличена! +1 к защите")
+        elif choice == "4":
+            self.crit_chance += 1
+            print("Шанс крита увеличен! +1%")
+        elif choice == "5":
+            self.dodge_chance += 1
+            print("Шанс уворота увеличен! +1%")
+        else:
+            print("Неверный выбор, защита увеличена по умолчанию")
+            self.base_defense += 1
+    
+    def show_status(self):
+        print(f"\n=== Статус {self.name} ===")
+        print(f"Уровень: {self.level} (Опыт: {self.xp}/{self.xp_to_level})")
+        print(f"Здоровье: {self.hp}/{self.max_hp}")
+        print(f"Урон: {self.min_dmg}-{self.max_dmg}")
+        print(f"Крит: {self.crit_chance_total}%")
+        print(f"Уворот: {self.dodge_chance_total}%")
+        print(f"Защита: {self.defense} (-{self.defense} к урону)")
+        print(f"Ключи подземелья: {self.dungeon_keys}")
+        
+        print("\nЭкипировка:")
+        for slot, item in self.equipment.items():
+            print(f"{slot.capitalize()}: {item.name if item else 'Пусто'}")
+        
+        print("\nСпутники:")
+        if self.companions:
+            for companion in self.companions:
+                print(f"{companion.name} (HP: {companion.hp}/{companion.max_hp})")
+                
+        else:
+            print("Нет спутников")
+        
+        print("\nАктивные эффекты:")
+        for effect_name, effects in self.active_effects.items():
+            for effect in effects:
+                print(f"{effect_name}: {effect['duration']} ходов осталось")
+
+        print(f"\nЗолото: {self.gold}")
+        print("====================\n")
+
+class Companion:
+    def __init__(self, name, max_hp, min_dmg, max_dmg, cost):
+        self.name = name
+        self.max_hp = max_hp
+        self.hp = max_hp
+        self.min_dmg = min_dmg
+        self.max_dmg = max_dmg
+        self.cost = cost
+    
+    def attack(self):
+        return random.randint(self.min_dmg, self.max_dmg)
+    
+    def take_damage(self, damage):
+        self.hp -= damage
+        return damage
+    
+    def is_alive(self):
+        return self.hp > 0
+    
+    def heal_full(self):
+        self.hp = self.max_hp
+
+class Item:
+    def __init__(self, name, item_type, slot, required_level, stats):
+        self.name = name
+        self.type = item_type
+        self.slot = slot
+        self.required_level = required_level
+        self.stats = stats
+
+class Shield(Item):
+    def __init__(self, name, required_level, block_chance, defense):
+        super().__init__(name, 'shield', 'shield', required_level, 
+                        {'block_chance': block_chance, 'defense': defense})
+        self.block_chance = block_chance
+
+def create_items():
+    items = [
+        Item("Деревянная палка", 'weapon', 'weapon', 1, {'min_dmg': 1, 'max_dmg': 3}),
+        Item("Ржавый кинжал", 'weapon', 'weapon', 2, {'min_dmg': 2, 'max_dmg': 4}),
+        Item("Железный меч", 'weapon', 'weapon', 3, {'min_dmg': 3, 'max_dmg': 6}),
+        Item("Стальной клинок", 'weapon', 'weapon', 5, {'min_dmg': 5, 'max_dmg': 9}),
+        Item("Зачарованный меч", 'weapon', 'weapon', 7, {'min_dmg': 7, 'max_dmg': 12}),
+        Item("Мифриловый меч", 'weapon', 'weapon', 9, {'min_dmg': 9, 'max_dmg': 15}),
+        
+        Shield("Деревянный щит", 1, 15, 1),
+        Shield("Укрепленный щит", 3, 25, 2),
+        Shield("Стальной щит", 5, 35, 3),
+        Shield("Зачарованный щит", 7, 45, 4),
+        Shield("Легендарный щит", 9, 55, 5),
+        
+        Item("Тряпье", 'armor', 'armor', 1, {'defense': 1}),
+        Item("Кожаная броня", 'armor', 'armor', 3, {'defense': 3}),
+        Item("Кольчуга", 'armor', 'armor', 5, {'defense': 5}),
+        Item("Латная броня", 'armor', 'armor', 7, {'defense': 7}),
+        Item("Доспех дракона", 'armor', 'armor', 9, {'defense': 9}),
+        
+        Item("Дырявые носки", 'armor', 'boots', 1, {'defense': 0, 'dodge': 1}),
+        Item("Кожаные сапоги", 'armor', 'boots', 3, {'defense': 1, 'dodge': 3}),
+        Item("Сапоги скорохода", 'armor', 'boots', 5, {'defense': 2, 'dodge': 5}),
+        Item("Мифриловые сапоги", 'armor', 'boots', 7, {'defense': 3, 'dodge': 7}),
+        Item("Сапоги тени", 'armor', 'boots', 9, {'defense': 4, 'dodge': 10}),
+        
+        Item("Медное кольцо", 'ring', 'ring', 2, {'crit': 2}),
+        Item("Серебряное кольцо", 'ring', 'ring', 4, {'crit': 5}),
+        Item("Золотое кольцо", 'ring', 'ring', 6, {'crit': 8}),
+        Item("Кольцо ярости", 'ring', 'ring', 8, {'crit': 10, 'min_dmg': 1, 'max_dmg': 1}),
+        Item("Кольцо некроманта", 'ring', 'ring', 10, {'crit': 15, 'min_dmg': 2, 'max_dmg': 2}),
+        
+        Item("Деревянный амулет", 'amulet', 'amulet', 2, {'crit': 1, 'dodge': 1}),
+        Item("Серебряный амулет", 'amulet', 'amulet', 4, {'crit': 3, 'dodge': 2}),
+        Item("Золотой амулет", 'amulet', 'amulet', 6, {'crit': 5, 'dodge': 3}),
+        Item("Амулет героя", 'amulet', 'amulet', 8, {'crit': 7, 'dodge': 5, 'defense': 2}),
+        Item("Амулет древнего короля", 'amulet', 'amulet', 10, {'crit': 10, 'dodge': 7, 'defense': 3}),
+        
+        Item("Зелье здоровья", 'potion', None, 1, {'heal': 30}),
+        Item("Зелье силы", 'potion', None, 1, {'min_dmg': 3, 'max_dmg': 3, 'duration': 3}),
+        Item("Зелье ловкости", 'potion', None, 1, {'dodge': 5, 'duration': 3}),
+        
+        Item("Зелье защиты", 'potion', None, 1, {'defense': 5, 'duration': 3}),
+        Item("Зелье концентрации", 'potion', None, 1, {'crit': 5, 'duration': 3}),
+        Item("Большое зелье здоровья", 'potion', None, 3, {'heal': 60}),
+        Item("Эликсир ярости", 'potion', None, 5, {'min_dmg': 5, 'max_dmg': 5, 'duration': 3}),
+        Item("Эликсир бессмертия", 'potion', None, 7, {'defense': 10, 'duration': 5}),
+        
+        Item("Золотая монета", 'treasure', None, 1, {'gold': 50}),
+        Item("Драгоценный камень", 'treasure', None, 1, {'gold': 100}),
+        Item("Мифриловый слиток", 'treasure', None, 1, {'gold': 200}),
+        Item("Карта сокровищ", 'treasure', None, 1, {'gold': 300}),
+        Item("Ключ от подземелья", 'key', None, 1, {})
+    ]
+    return items
+
+def create_monster_pack(hero_level):
+    """Создает группу монстров с учетом уровня героя"""
+    monster_count = random.choices(
+        [1, 2, 3, 4],
+        weights=[80, 12.5, 5, 2.5]
+    )[0]
+    
+    monsters = []
+    for _ in range(monster_count):
+        monster_level = random.choices(
+            [hero_level-1, hero_level, hero_level+1, random.randint(3, 9)],
+            weights=[20, 60, 10, 10]
+        )[0]
+        monster_level = max(1, min(10, monster_level))
+        
+        if monster_level == 1:
+            monster_types = [
+                ("Гоблин", "Может бросить камень (доп. урон)"),
+                ("Крыса", "Отравленный укус (урон каждый ход)"),
+                ("Паук", "Паутина (шанс обездвижить)")
+            ]
+        elif monster_level == 2:
+            monster_types = [
+                ("Скелет", "Устойчив к критическим ударам"),
+                ("Волк", "Стайный инстинкт (урон увеличивается при атаке группой)"),
+                ("Бандит", "Грязный прием (шанс оглушить)")
+            ]
+        elif monster_level == 3:
+            monster_types = [
+                ("Орк", "Ярость: при низком HP урон увеличивается"),
+                ("Тролль", "Регенерация: восстанавливает HP каждый ход"),
+                ("Гарпия", "Атака с воздуха (игнорирует часть защиты)")
+            ]
+        elif monster_level == 4:
+            monster_types = [
+                ("Призрак", "Может проходить сквозь блоки"),
+                ("Зомби", "Медленный, но выносливый"),
+                ("Гаргойль", "Каменная кожа (уменьшает получаемый урон)")
+            ]
+        elif monster_level == 5:
+            monster_types = [
+                ("Вампир", "Лечится за счет нанесенного урона"),
+                ("Оборотень", "Превращение (увеличивает урон ночью)"),
+                ("Элементаль", "Стихийный урон (дополнительный эффект)")
+            ]
+        elif monster_level == 6:
+            monster_types = [
+                ("Демон", "Поджигает противника (доп. урон каждый ход)"),
+                ("Минотавр", "Таран (шанс оглушить)"),
+                ("Химера", "Мультиатака (атакует несколько раз)")
+            ]
+        elif monster_level == 7:
+            monster_types = [
+                ("Лич", "Воскрешает павших союзников"),
+                ("Драконид", "Драконья кровь (устойчивость к магии)"),
+                ("Голем", "Нежить (нечувствителен к боли)")
+            ]
+        elif monster_level == 8:
+            monster_types = [
+                ("Древний дракон", "Огненное дыхание (урон по всей группе)"),
+                ("Темный рыцарь", "Темная аура (снижает защиту противников)"),
+                ("Архидемон", "Проклятие (накладывает негативные эффекты)")
+            ]
+        elif monster_level == 9:
+            monster_types = [
+                ("Повелитель тьмы", "Насылает проклятия на противников"),
+                ("Король демонов", "Призыв демонов (увеличивает число противников)"),
+                ("Архилич", "Темная магия (наносит урон и снижает характеристики)")
+            ]
+        else:
+            monster_types = [
+                ("Некромант", "Воскрешает мертвецов и насылает темную магию"),
+                ("Повелитель смерти", "Крадет души (уменьшает максимальное HP)"),
+                
+                ("Верховный дракон", "Стихийные атаки (огонь, лед, молния)")
+            ]
+        
+        name, ability = random.choice(monster_types)
+        
+        hp = 30 + (monster_level - 1) * 15
+        min_dmg = 5 + (monster_level - 1) * 2
+        max_dmg = 8 + (monster_level - 1) * 3
+        
+        if monster_level >= 7:
+            hp += 20
+            min_dmg += 3
+            max_dmg += 5
+        
+        xp_reward = 15 + monster_level * 8
+        gold_reward = 10 + monster_level * 5
+        
+        monsters.append(Monster(name, hp, min_dmg, max_dmg, xp_reward, gold_reward, ability))
+    
+    return monsters
+
+class Monster:
+    def __init__(self, name, hp, min_dmg, max_dmg, xp_reward, gold_reward, ability):
+        self.name = name
+        self.hp = hp
+        self.min_dmg = min_dmg
+        self.max_dmg = max_dmg
+        self.xp_reward = xp_reward
+        self.gold_reward = gold_reward
+        self.ability = ability
+        self.level = min(10, max(1, (hp // 10) - 1))
+    
+    def attack(self):
+        return random.randint(self.min_dmg, self.max_dmg)
+    
+    def take_damage(self, damage):
+        self.hp -= damage
+        return damage
+    
+    def is_alive(self):
+        return self.hp > 0
+
+def create_dungeon_boss(floor):
+    bosses = [
+        {"name": "Гоблин-берсерк", "hp": 80, "min_dmg": 8, "max_dmg": 12, 
+         "ability": "Ярость: удваивает урон при HP < 30%", "key": "Ключ от 2 этажа"},
+        {"name": "Король крыс", "hp": 100, "min_dmg": 10, "max_dmg": 15, 
+         "ability": "Призывает крыс-помощников", "key": "Ключ от 3 этажа"},
+        {"name": "Вождь орков", "hp": 120, "min_dmg": 12, "max_dmg": 18, 
+         "ability": "Боевой клич: увеличивает урон союзников", "key": "Ключ от 4 этажа"},
+        {"name": "Повелитель зомби", "hp": 150, "min_dmg": 15, "max_dmg": 20, 
+         "ability": "Воскрешает павших зомби", "key": "Ключ от 5 этажа"},
+        {"name": "Королева вампиров", "hp": 180, "min_dmg": 18, "max_dmg": 24, 
+         "ability": "Крадет здоровье при атаке", "key": "Ключ от 6 этажа"},
+        {"name": "Архидемон", "hp": 220, "min_dmg": 20, "max_dmg": 28, 
+         "ability": "Поджигает противников", "key": "Ключ от 7 этажа"},
+        {"name": "Дракон тьмы", "hp": 280, "min_dmg": 24, "max_dmg": 32, 
+         "ability": "Огненное дыхание (урон по всем)", "key": "Ключ от 8 этажа"},
+        {"name": "Лич-император", "hp": 320, "min_dmg": 26, "max_dmg": 36, 
+         "ability": "Темная магия: снижает защиту противников", "key": "Ключ от 9 этажа"},
+        {"name": "Повелитель бездны", "hp": 380, "min_dmg": 30, "max_dmg": 40, 
+         "ability": "Призывает демонов из бездны", "key": "Ключ от 10 этажа"},
+        {"name": "Некромант", "hp": 500, "min_dmg": 35, "max_dmg": 50, 
+         "ability": "Воскрешает мертвецов, насылает проклятия", "key": "Ключ свободы"}
+    ]
+    
+    boss = bosses[floor - 1]
+    return Monster(boss["name"], boss["hp"], boss["min_dmg"], boss["max_dmg"], 
+                  floor * 100, floor * 50, boss["ability"]), boss["key"]
+
+
+def dungeon_event(hero, floor):
+    events = [
+        ("монстры", 0.5),
+        ("сундук", 0.15),
+        ("таинственный незнакомец", 0.1),
+        ("ловушка", 0.1),
+        ("горячий источник", 0.05),
+        ("загадочный алтарь", 0.05),
+        ("кладбище", 0.03),
+        ("поле цветов", 0.03),
+        ("хижина ведьмы", 0.03),
+        ("лагерь странников", 0.03),
+        ("лагерь монстров", 0.03),
+        ("ничего", 0.03)
+    ]
+    
+    event = random.choices([e[0] for e in events], weights=[e[1] for e in events])[0]
+    
+    if event == "монстры":
+        monsters = create_monster_pack(hero.level)
+        print("\nВы встретили группу монстров!")
+        return monsters
+    
+    elif event == "сундук":
+        print("\nВы нашли старый сундук! Попытаться открыть его?")
+        print("1. Да")
+        print("2. Нет")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1":
+            if random.random() < 0.5:
+                loot = random.choice([
+                    Item("Золотая монета", 'treasure', None, 1, {'gold': 50}),
+                    random.choice([i for i in all_items if i.required_level <= hero.level + 1 and i.type != 'potion']),
+                    Item("Драгоценный камень", 'treasure', None, 1, {'gold': 100})
+                ])
+                hero.add_item(loot)
+                print(f"Вы открыли сундук и нашли {loot.name}!")
+            else:
+                print("Сундук не поддается! Попробовать разбить его?")
+                print(f"Ваш урон: {hero.min_dmg}-{hero.max_dmg} (нужно больше 15)")
+                print("1. Попробовать разбить")
+                print("2. Оставить")
+                
+                choice = input("Ваш выбор: ")
+                if choice == "1" and hero.max_dmg > 15:
+                    loot = random.choice([
+                        Item("Мифриловый слиток", 'treasure', None, 1, {'gold': 200}),
+                        random.choice([i for i in all_items if i.required_level <= hero.level + 2]),
+                        Item("Карта сокровищ", 'treasure', None, 1, {'gold': 300})
+                    ])
+                    hero.add_item(loot)
+                    print(f"Вы разбили сундук и нашли {loot.name}!")
+                else:
+                    print("Вам не хватило сил, пришлось оставить сундук...")
+        else:
+            print("Вы решили не рисковать и прошли мимо.")
+        return None
+    
+    elif event == "таинственный незнакомец":
+        print("\nК вам подходит таинственный незнакомец в темном плаще.")
+        print("Он предлагает купить редкое зелье за 100 золота.")
+        print(f"Ваше золото: {hero.gold}")
+        print("1. Купить")
+        print("2. Отказаться")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1" and hero.gold >= 100:
+            hero.gold -= 100
+            potion = random.choice([
+                Item("Эликсир силы", 'potion', None, 5, {'min_dmg': 5, 'max_dmg': 5, 'duration': 3}),
+                Item("Эликсир бессмертия", 'potion', None, 7, {'defense': 10, 'duration': 5}),
+                Item("Легендарное зелье", 'potion', None, 9, {'heal': 100})
+            ])
+            hero.add_item(potion)
+            print(f"Вы купили {potion.name}!")
+        else:
+            print("Незнакомец недовольно хмыкнул и исчез во тьме.")
+        return None
+    
+    elif event == "ловушка":
+        trap_types = [
+            ("ядовитые иглы", 10, 15, "Вы наступили на скрытые иглы!"),
+            ("падающий камень", 15, 25, "С потолка падает огромный камень!"),
+            ("огненная ловушка", 20, 30, "Из стен вырывается пламя!"),
+            ("магический взрыв", 25, 40, "Срабатывает магическая ловушка!"),
+            ("шипастая яма", 30, 50, "Пол под вами проваливается в яму с шипами!")
+        ]
+        
+        trap_name, min_dmg, max_dmg, description = random.choice(trap_types)
+        print(f"\n{description} Это ловушка: {trap_name}!")
+        
+        damage = random.randint(min_dmg, max_dmg)
+        actual_damage = max(1, damage - hero.defense)
+        hero.hp -= actual_damage
+        
+        danger = "небольшие повреждения"
+        if actual_damage > 30:
+            danger = "КРИТИЧЕСКИЕ повреждения"
+        elif actual_damage > 20:
+            danger = "серьезные повреждения"
+        elif actual_damage > 10:
+            danger = "значительные повреждения"
+            
+        print(f"Ловушка наносит {actual_damage} урона ({danger})! Осталось HP: {hero.hp}/{hero.max_hp}")
+        return None
+    
+    elif event == "горячий источник":
+        print("\nВы нашли горячий источник!")
+        if random.random() < 0.3:  # 30% шанс что это ловушка
+            print("Но вода оказалась ядовитой!")
+            damage = random.randint(15, 25)
+            actual_damage = max(1, damage - hero.defense)
+            hero.hp -= actual_damage
+            print(f"Вы теряете {actual_damage} HP! Осталось HP: {hero.hp}/{hero.max_hp}")
+        else:
+            print("Теплая вода обладает целебными свойствами.")
+            print("Погрузиться в источник?")
+            print("1. Да")
+            print("2. Нет")
+            
+            choice = input("Ваш выбор: ")
+            if choice == "1":
+                hero.heal(hero.max_hp)
+                for companion in hero.companions:
+                    companion.heal_full()
+                print("Источник полностью исцелил вас и ваших спутников!")
+            else:
+                print("Вы решили не рисковать и прошли мимо.")
+        return None
+    
+    elif event == "загадочный алтарь":
+        print("\nВы нашли древний загадочный алтарь. Прикоснуться к нему?")
+        print("1. Да")
+        print("2. Нет")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1":
+            effect = random.choice(["positive", "negative"])
+            if effect == "positive":
+                buff = random.choice([
+                    ("Сила", "Ваши мышцы наполняются силой! Урон +3", 
+                     {'base_min_dmg': 3, 'base_max_dmg': 3}),
+                    ("Защита", "Кожа становится тверже! Защита +5", 
+                     {'base_defense': 5}),
+                    ("Крит", "Глаза начинают светиться! Крит +5%", 
+                     {'crit_chance': 5}),
+                    ("Уворот", "Тело становится легче! Уворот +5%", 
+                     {'dodge_chance': 5}),
+                    ("Здоровье", "Жизненная сила переполняет вас! Макс. HP +10",
+                     {'max_hp': 10, 'hp': 10})
+                ])
+                
+                # Применяем постоянные изменения
+                for stat, value in buff[2].items():
+                    if stat == 'max_hp':
+                        hero.max_hp += value
+                        hero.hp += value
+                    else:
+                        setattr(hero, stat, getattr(hero, stat) + value)
+                
+                print(buff[1])
+                print("Изменения постоянные!")
+            else:
+                debuff = random.choice([
+                    ("Слабость", "Вы чувствуете слабость! Урон -2", 
+                     {'base_min_dmg': -2, 'base_max_dmg': -2}),
+                    ("Хрупкость", "Кости становятся хрупкими! Защита -3", 
+                     {'base_defense': -3}),
+                    ("Замешательство", "Мысли путаются! Крит -3%", 
+                     {'crit_chance': -3}),
+                    ("Тяжесть", "Ноги наливаются свинцом! Уворот -3%", 
+                     {'dodge_chance': -3}),
+                    ("Болезнь", "Вы чувствуете недомогание! Макс. HP -5",
+                     {'max_hp': -5, 'hp': -5})
+                ])
+                
+                # Применяем постоянные изменения
+                for stat, value in debuff[2].items():
+                    if stat == 'max_hp':
+                        hero.max_hp = max(10, hero.max_hp + value)
+                        hero.hp = max(1, hero.hp + value)
+                    else:
+                        current = getattr(hero, stat)
+                        setattr(hero, stat, max(0, current + value))
+                
+                print(debuff[1])
+                print("Изменения постоянные!")
+        else:
+            
+            print("Вы решили не рисковать и прошли мимо.")
+        return None
+    
+    elif event == "кладбище":
+        print("\nВы нашли старое кладбище. В воздухе витает магия некроманта.")
+        print("1. Исследовать")
+        print("2. Пройти мимо")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1":
+            if random.random() < 0.7:
+                print("Это была ловушка! Из могил поднимаются нежить!")
+                skeleton = Monster("Восставший скелет", 40, 5, 8, 20, 15, "Устойчив к критическим ударам")
+                zombie = Monster("Зомби", 50, 6, 10, 25, 20, "Медленный, но выносливый")
+                
+                skeleton.hp += (hero.level - 1) * 10
+                skeleton.min_dmg += (hero.level - 1) * 2
+                skeleton.max_dmg += (hero.level - 1) * 3
+                
+                zombie.hp += (hero.level - 1) * 10
+                zombie.min_dmg += (hero.level - 1) * 2
+                zombie.max_dmg += (hero.level - 1) * 3
+                
+                return [skeleton, zombie]
+            else:
+                loot = Item("Древний артефакт", 'treasure', None, 1, {'gold': 200})
+                hero.add_item(loot)
+                print(f"Вы нашли {loot.name}!")
+        else:
+            print("Вы поспешно покидаете это зловещее место.")
+        return None
+    
+    elif event == "поле цветов":
+        print("\nВы вышли на красивое поле, усыпанное цветами.")
+        print("1. Собрать цветы")
+        print("2. Пройти мимо")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1":
+            if random.random() < 0.7:
+                effect = random.choice(["heal", "buff"])
+                if effect == "heal":
+                    heal_amount = random.randint(10, 30)
+                    hero.heal(heal_amount)
+                    print(f"Цветы оказались целебными! Вы восстановили {heal_amount} HP.")
+                else:
+                    buff_type = random.choice(["dodge", "crit"])
+                    if buff_type == "dodge":
+                        hero.add_effect("Цветочная пыльца", 3, dodge=10)
+                        print("Цветочная пыльца увеличивает ваш шанс уворота на 10% на 3 хода!")
+                    else:
+                        hero.add_effect("Цветочный нектар", 3, crit=10)
+                        print("Цветочный нектар увеличивает ваш шанс крита на 10% на 3 хода!")
+            else:
+                print("Цветы оказались ядовитыми!")
+                damage = random.randint(5, 15)
+                hero.hp -= damage
+                print(f"Вы теряете {damage} HP! Осталось HP: {hero.hp}/{hero.max_hp}")
+        else:
+            print("Вы решили не рисковать и прошли мимо.")
+        return None
+    
+    elif event == "хижина ведьмы":
+        print("\nВы нашли старую хижину в лесу. Из трубы идет дым.")
+        print("1. Постучаться")
+        print("2. Пройти мимо")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1":
+            if random.random() < 0.6:  # 60% шанс что ведьма добрая
+                print("Добрая ведьма предлагает вам выбор:")
+                print("1. Выпить зелье здоровья (+50 HP)")
+                print("2. Получить временное усиление (+5 к защите на 3 хода)")
+                print("3. Получить золото (50-100)")
+                
+                witch_choice = input("Ваш выбор (1-3): ")
+                if witch_choice == "1":
+                    hero.heal(50)
+                    print("Вы выпили зелье и восстановили 50 HP!")
+                elif witch_choice == "2":
+                    hero.add_effect("Защита ведьмы", 3, defense=5)
+                    print("Вы получили +5 к защите на 3 хода!")
+                elif witch_choice == "3":
+                    gold = random.randint(50, 100)
+                    hero.gold += gold
+                    print(f"Ведьма дала вам {gold} золота!")
+                else:
+                    print("Ведьма разозлилась на вашу нерешительность!")
+                    damage = random.randint(10, 20)
+                    hero.hp -= damage
+                    
+                    print(f"Вы теряете {damage} HP! Осталось HP: {hero.hp}/{hero.max_hp}")
+            else:
+                print("Злая ведьма атакует вас!")
+                witch = Monster("Злая ведьма", 60, 8, 12, 40, 30, "Магические атаки")
+                return [witch]
+        else:
+            print("Вы решили не рисковать и прошли мимо.")
+        return None
+    
+    elif event == "лагерь странников":
+        print("\nВы нашли мирный лагерь путешественников.")
+        print("1. Присоединиться к отдыху")
+        print("2. Пройти мимо")
+        
+        choice = input("Ваш выбор: ")
+        if choice == "1":
+            print("Странники делятся с вами едой и историями.")
+            heal_amount = hero.max_hp // 3
+            hero.heal(heal_amount)
+            for companion in hero.companions:
+                if companion.is_alive():
+                    companion.heal_full()
+            print(f"Вы и ваши спутники восстановили {heal_amount} HP.")
+            
+            if random.random() < 0.4:
+                item = random.choice([
+                    Item("Зелье здоровья", 'potion', None, 1, {'heal': 30}),
+                    Item("Зелье силы", 'potion', None, 1, {'min_dmg': 3, 'max_dmg': 3, 'duration': 3}),
+                    Item("Золотая монета", 'treasure', None, 1, {'gold': 50})
+                ])
+                hero.add_item(item)
+                print(f"Странники подарили вам {item.name}!")
+        else:
+            print("Вы прошли мимо лагеря.")
+        return None
+    
+    elif event == "лагерь монстров":
+        print("\nВы наткнулись на лагерь монстров!")
+        monsters = []
+        for _ in range(random.randint(2, 4)):
+            monster = random.choice([
+                Monster("Гоблин-разведчик", 40, 5, 8, 20, 15, "Может позвать подкрепление"),
+                Monster("Орк-воин", 60, 8, 12, 30, 25, "Сильнее в группе"),
+                Monster("Тролль-страж", 80, 10, 15, 40, 35, "Регенерация")
+            ])
+            monsters.append(monster)
+        
+        print("Монстры заметили вас и готовятся к атаке!")
+        return monsters
+    
+    else:
+        print("\nЭта часть подземелья пуста...")
+        return None
+
+
+def battle(hero, monsters):
+    print(f"\n=== Бой с {len(monsters)} противниками ===")
+    for i, monster in enumerate(monsters, 1):
+        print(f"{i}. {monster.name} (Ур. {monster.level}): HP={monster.hp}, Урон={monster.min_dmg}-{monster.max_dmg}")
+        print(f"   Способность: {monster.ability}")
+    
+    turn = 0
+    while hero.is_alive() and any(m.is_alive() for m in monsters):
+        turn += 1
+        print(f"\n=== Ход {turn} ===")
+        
+        hero.update_effects()
+        
+        dead_companions = [c for c in hero.companions if not c.is_alive()]
+        for companion in dead_companions:
+            print(f"{companion.name} пал в бою и возвращен в таверну!")
+            companion.heal_full()
+            hero.companions.remove(companion)
+            hero.available_companions.append(companion)
+        
+        print("\nВаш ход:")
+        print("1. Атаковать")
+        print("2. Использовать предмет")
+        
+        choice = input("Выберите действие: ")
+        
+        if choice == "1":
+            alive_monsters = [m for m in monsters if m.is_alive()]
+            print("Выберите цель:")
+            for i, monster in enumerate(alive_monsters, 1):
+                print(f"{i}. {monster.name} (HP: {monster.hp})")
+            
+            try:
+                target_idx = int(input()) - 1
+                if 0 <= target_idx < len(alive_monsters):
+                    target = alive_monsters[target_idx]
+                    hero_dmg = hero.attack()
+                    target.take_damage(hero_dmg)
+                    print(f"{hero.name} атакует {target.name} и наносит {hero_dmg} урона!")
+                else:
+                    print("Неверный выбор, атакуете первого монстра!")
+                    target = alive_monsters[0]
+                    hero_dmg = hero.attack()
+                    target.take_damage(hero_dmg)
+                    print(f"{hero.name} атакует {target.name} и наносит {hero_dmg} урона!")
+            except ValueError:
+                print("Неверный ввод, атакуете первого монстра!")
+                target = alive_monsters[0]
+                hero_dmg = hero.attack()
+                target.take_damage(hero_dmg)
+                print(f"{hero.name} атакует {target.name} и наносит {hero_dmg} урона!")
+            
+            for companion in hero.companions:
+                if companion.is_alive() and any(m.is_alive() for m in monsters):
+                    alive_monsters = [m for m in monsters if m.is_alive()]
+                    target = random.choice(alive_monsters)
+                    dmg = companion.attack()
+                    target.take_damage(dmg)
+                    print(f"{companion.name} атакует {target.name} и наносит {dmg} урона!")
+        
+        elif choice == "2":
+            show_inventory(hero)
+            continue
+        else:
+            print("Неверный выбор, пропускаете ход!")
+        
+        if not any(m.is_alive() for m in monsters):
+            break
+        
+        print("\nХод монстров:")
+        for monster in monsters:
+            if monster.is_alive():
+                targets = [hero] + [c for c in hero.companions if c.is_alive()]
+                target = random.choice(targets)
+                
+                monster_dmg = monster.attack()
+                actual_damage = target.take_damage(monster_dmg)
+                
+                if isinstance(target, Hero):
+                    print(f"{monster.name} атакует {target.name} и наносит {actual_damage} урона!")
+                else:
+                    print(f"{monster.name} атакует {target.name} и наносит {actual_damage} урона!")
+        
+        print(f"\n{hero.name}: HP={hero.hp}")
+        for companion in hero.companions:
+            if companion.is_alive():
+                print(f"{companion.name}: HP={companion.hp}")
+        for monster in monsters:
+            if monster.is_alive():
+                print(f"{monster.name}: HP={monster.hp}")
+        
+        time.sleep(1)
+    
+    if hero.is_alive():
+        total_gold = sum(m.gold_reward for m in monsters)
+        
+        total_xp = sum(m.xp_reward for m in monsters)
+        hero.gold += total_gold
+        hero.xp += total_xp
+
+        print(f"\nПобеда! Вы получили {total_gold} золота и {total_xp} опыта!")
+        
+        for monster in monsters:
+            if random.random() < 0.4:
+                possible_items = [i for i in all_items if i.required_level <= hero.level]
+                if possible_items:
+                    item = random.choice(possible_items)
+                    hero.add_item(item)
+        
+        if hero.xp >= hero.xp_to_level:
+            hero.level_up()
+        return True
+    else:
+        print("\nВы потерпели поражение...")
+        return False
+
+def dungeon_exploration(hero):
+    print("\n=== Вход в подземелье ===")
+    print("Вы спускаетесь в темное подземелье, полное опасностей...")
+    time.sleep(2)
+    
+    total_floors = 10
+    hero.current_dungeon_floor = 1
+    
+    while hero.current_dungeon_floor <= total_floors and hero.is_alive():
+        print(f"\n=== Этаж {hero.current_dungeon_floor}/{total_floors} ===")
+        found_exit = False
+        
+        while not found_exit and hero.is_alive():
+            print("\nВыберите действие:")
+            print("1. Исследовать этаж")
+            print("2. Показать статус")
+            print("3. Выйти из подземелья")
+            
+            choice = input("Ваш выбор: ")
+            
+            if choice == "1":
+                # 5% шанс найти босса и выход
+                if random.random() <= 0.05:
+                    boss, key_name = create_dungeon_boss(hero.current_dungeon_floor)
+                    print(f"\nВы нашли проход на следующий этаж, но его охраняет {boss.name}!")
+                    print(f"Способность босса: {boss.ability}")
+                    
+                    if battle(hero, [boss]):
+                        hero.dungeon_keys += 1
+                        print(f"\nВы победили {boss.name} и получили {key_name}!")
+                        found_exit = True
+                else:
+                    # 50% шанс встретить монстров, иначе случайное событие
+                    if random.random() <= 0.5:
+                        monsters = create_monster_pack(hero.level)
+                        print("\nВы встретили группу монстров!")
+                        if not battle(hero, monsters):
+                            break
+                    else:
+                        event_result = dungeon_event(hero, hero.current_dungeon_floor)
+                        if event_result:  # Если событие вернуло монстров
+                            if not battle(hero, event_result):
+                                break
+            
+            elif choice == "2":
+                hero.show_status()
+            
+            elif choice == "3":
+                print("\nВы покидаете подземелье...")
+                return False
+            
+            else:
+                print("Неверный выбор. Попробуйте снова.")
+        
+        if found_exit and hero.is_alive():
+            if hero.current_dungeon_floor == total_floors:
+                print("\n=== ПОБЕДА ===")
+                print("Вы достигли глубины подземелья и победили Некроманта!")
+                print("Принцесса спасена, а Император щедро наградил вас!")
+                print("Спасибо за игру!")
+                return True
+            
+            # Отдых между этажами
+            heal_amount = hero.max_hp // 4
+            hero.heal(heal_amount)
+            for companion in hero.companions:
+                if companion.is_alive():
+                    companion.heal_full()
+            print(f"\nВы немного отдохнули и восстановили {heal_amount} HP.")
+            time.sleep(1)
+            
+            hero.current_dungeon_floor += 1
+    
+    if not hero.is_alive():
+        print("\nВаше приключение в подземелье закончилось неудачей...")
+        hero.hp = max(hero.hp, hero.max_hp // 2)
+        for companion in hero.companions:
+            companion.hp = max(companion.hp, companion.max_hp // 2)
+        return False
+    
+    return False
+
+
+def show_inventory(hero):
+    while True:
+        print("\n=== Инвентарь ===")
+        if not hero.inventory:
+            print("Инвентарь пуст")
+            return
+        
+        for i, item in enumerate(hero.inventory, 1):
+            req_level = f" (ур. {item.required_level})" if item.required_level > 1 else ""
+            value = ""
+            if item.type in ['weapon', 'shield', 'armor', 'ring', 'amulet']:
+                value = f" - Цена: {item.required_level * 20}"
+            elif item.type == 'potion':
+                value = f" - Цена: {item.required_level * 10}"
+            print(f"{i}. {item.name}{req_level} ({item.type}){value}")
+        
+        print("\nВыберите действие:")
+        print("1. Использовать предмет")
+        print("2. Продать предмет")
+        print("0. Выйти")
+        
+        choice = input("Ваш выбор: ")
+        
+        if choice == "1":
+            print("\nВыберите предмет для использования (или 0 для отмены):")
+            try:
+                item_idx = int(input()) - 1
+                if item_idx == -1:
+                    continue
+                if 0 <= item_idx < len(hero.inventory):
+                    use_item(hero, hero.inventory[item_idx])
+                else:
+                    print("Неверный выбор!")
+            except ValueError:
+                print("Введите число!")
+        elif choice == "2":
+            print("\nВыберите предмет для продажи (или 0 для отмены):")
+            try:
+                item_idx = int(input()) - 1
+                if item_idx == -1:
+                    continue
+                if 0 <= item_idx < len(hero.inventory):
+                    sell_item(hero, hero.inventory[item_idx])
+                else:
+                    print("Неверный выбор!")
+            except ValueError:
+                print("Введите число!")
+        elif choice == "0":
+            return
+        else:
+            print("Неверный выбор!")
+
+def use_item(hero, item):
+    if item.type == 'potion':
+        if 'heal' in item.stats:
+            heal_amount = min(item.stats['heal'], hero.max_hp - hero.hp)
+            if heal_amount > 0:
+                hero.heal(heal_amount)
+                hero.inventory.remove(item)
+                print(f"Использовано зелье здоровья. Восстановлено {heal_amount} HP.")
+            else:
+                print("Ваше здоровье уже максимально!")
+        elif 'duration' in item.stats:
+            effect_name = item.name.replace("Зелье ", "").replace("Эликсир ", "")
+            effect_stats = {k: v for k, v in item.stats.items() if k != 'duration'}
+            hero.add_effect(effect_name, item.stats['duration'], **effect_stats)
+            hero.inventory.remove(item)
+            print(f"Использовано {item.name}. Эффект активен {item.stats['duration']} ходов.")
+    elif item.type == 'key':
+        hero.dungeon_keys += 1
+        hero.inventory.remove(item)
+        print("Вы получили ключ от подземелья!")
+    elif item.slot:
+        hero.equip_item(item)
+    else:
+        print("Этот предмет нельзя использовать.")
+
+def sell_item(hero, item):
+    if item.type in ['weapon', 'shield', 'armor', 'ring', 'amulet']:
+        price = item.required_level * 20
+    elif item.type == 'potion':
+        price = item.required_level * 10
+    elif item.type == 'treasure' and 'gold' in item.stats:
+        price = item.stats['gold']
+    else:
+        print("Этот предмет нельзя продать.")
+        return
+    
+    hero.gold += price
+    hero.inventory.remove(item)
+    print(f"Вы продали {item.name} за {price} золота!")
+
+
+def shop(hero):
+    available_items = [item for item in all_items 
+                      if item.required_level <= hero.level + 2 and 
+                      item.type in ['potion', 'weapon', 'shield', 'armor', 'ring', 'amulet']]
+    
+    if not available_items:
+        print("Магазин пуст, зайдите позже!")
+        return
+    
+    prices = []
+    for item in available_items:
+        base_price = item.required_level * 20
+        if item.type == 'potion':
+            price = base_price // 2
+        elif item.type in ['ring', 'amulet']:
+            price = base_price * 2
+        else:
+            price = base_price
+        prices.append(price)
+    
+    print("\n=== Магазин ===")
+    print(f"Ваше золото: {hero.gold}")
+    for i, (item, price) in enumerate(zip(available_items, prices), 1):
+        stats = ""
+        if item.type == 'weapon':
+            stats = f"Урон: {item.stats['min_dmg']}-{item.stats['max_dmg']} (ур. {item.required_level})"
+        elif item.type == 'shield':
+            stats = f"Защита: {item.stats['defense']}, Блок: {item.stats['block_chance']}% (ур. {item.required_level})"
+        elif item.type == 'armor':
+            stats = f"Защита: {item.stats['defense']} (ур. {item.required_level})"
+        elif item.type == 'boots':
+            stats = f"Защита: {item.stats['defense']}, Уворот: {item.stats['dodge']}% (ур. {item.required_level})"
+        elif item.type == 'ring' or item.type == 'amulet':
+            stats = []
+            if 'crit' in item.stats:
+                stats.append(f"Крит: +{item.stats['crit']}%")
+            if 'dodge' in item.stats:
+                stats.append(f"Уворот: +{item.stats['dodge']}%")
+            if 'defense' in item.stats:
+                stats.append(f"Защита: +{item.stats['defense']}")
+            stats = f"{', '.join(stats)} (ур. {item.required_level})"
+        elif item.type == 'potion':
+            if 'heal' in item.stats:
+                stats = f"Восстанавливает {item.stats['heal']} HP (ур. {item.required_level})"
+            else:
+                effects = []
+                for stat, value in item.stats.items():
+                    if stat != 'duration':
+                        effects.append(f"+{value} к {'урону' if 'dmg' in stat else stat}")
+                stats = f"{', '.join(effects)} на {item.stats['duration']} ходов (ур. {item.required_level})"
+        
+        print(f"{i}. {item.name} - {price} золота ({stats})")
+    
+    print("0. Выйти из магазина")
+    
+    print("\nВыберите предмет для покупки:")
+    try:
+        choice = int(input()) - 1
+        if choice == -1:
+            return
+        if 0 <= choice < len(available_items):
+            if hero.gold >= prices[choice]:
+                hero.gold -= prices[choice]
+                hero.add_item(available_items[choice])
+                print(f"Куплено: {available_items[choice].name}")
+            else:
+                print("Недостаточно золота!")
+        else:
+            print("Неверный выбор!")
+    except ValueError:
+        print("Введите число!")
+
+
+def tavern(hero):
+    print("\n=== Таверна 'Упрямый гном' ===")
+    print("Здесь можно нанять верных спутников для ваших приключений.")
+    print(f"Ваше золото: {hero.gold}")
+    print("Доступные спутники:")
+    
+    if not hero.available_companions:
+        print("Нет доступных спутников для найма.")
+        return
+    
+    for i, companion in enumerate(hero.available_companions, 1):
+        print(f"{i}. {companion.name} (HP: {companion.max_hp}, Урон: {companion.min_dmg}-{companion.max_dmg}) - {companion.cost} золота")
+    
+    print("0. Выйти из таверны")
+    
+    print("\nВыберите спутника для найма:")
+    try:
+        choice = int(input()) - 1
+        if choice == -1:
+            return
+        if 0 <= choice < len(hero.available_companions):
+            companion = hero.available_companions[choice]
+            if hero.gold >= companion.cost:
+                hero.gold -= companion.cost
+                hero.companions.append(companion)
+                hero.available_companions.remove(companion)
+                print(f"Вы наняли {companion.name}!")
+            else:
+                print("Недостаточно золота!")
+        else:
+            print("Неверный выбор!")
+    except ValueError:
+        print("Введите число!")
+
+def main():
+    hero = Hero()
+    print("=== Спасение принцессы ===")
+    print("Вы отважный путешественник, который взялся за главное задание -")
+    print("найти и спасти дочь Императора, похищенную злобным Некромантом.")
+    print("По слухам, он держит ее в самом сердце своих подземелий.")
+    print("Вам предстоит пройти через 10 уровней подземелья, чтобы спасти принцессу!")
+    print("====================================\n")
+    
+    hero.name = input("Введите имя вашего героя: ")
+    print(f"\nДобро пожаловать, {hero.name}! Ваше приключение начинается...")
+    
+    starter_items = [
+        Item("Деревянная палка", 'weapon', 'weapon', 1, {'min_dmg': 1, 'max_dmg': 3}),
+        Item("Тряпье", 'armor', 'armor', 1, {'defense': 1}),
+        Item("Дырявые носки", 'armor', 'boots', 1, {'defense': 0, 'dodge': 1}),
+        Item("Зелье здоровья", 'potion', None, 1, {'heal': 30})
+    ]
+    for item in starter_items:
+        hero.inventory.append(item)
+    
+    while True:
+        hero.show_status()
+        print("1. Охота на монстров (тренировка)")
+        print("2. Исследовать подземелье (основной квест)")
+        print("3. Посмотреть инвентарь")
+        print("4. Посетить магазин")
+        print("5. Заглянуть в таверну")
+        print("6. Выйти из игры")
+        
+        choice = input("Выберите действие: ")
+        
+        if choice == "1":
+            monsters = create_monster_pack(hero.level)
+            print("\nВы отправились на охоту...")
+            if not battle(hero, monsters):
+                hero.hp = hero.max_hp // 2
+                for companion in hero.companions:
+                    companion.hp = companion.max_hp // 2
+                print("Вы чудом выжили и восстановили половину здоровья.")
+        elif choice == "2":
+            if hero.level < 3:
+                print("Подземелья слишком опасны! Вернитесь после 3 уровня.")
+            else:
+                if dungeon_exploration(hero):
+                    break
+        elif choice == "3":
+            show_inventory(hero)
+        elif choice == "4":
+            shop(hero)
+        elif choice == "5":
+            tavern(hero)
+        elif choice == "6":
+            print("Вы покидаете игру... Принцесса так и останется в плену у Некроманта.")
+            break
+        else:
+            print("Неверный выбор. Попробуйте снова.")
+
+if __name__ == "__main__":
+    all_items = create_items()
+    main()
