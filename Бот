@@ -1,0 +1,235 @@
+import asyncio
+import logging
+import os
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from dotenv import load_dotenv
+
+# Загрузка переменных окружения
+load_dotenv()
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Токен бота
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+
+if not BOT_TOKEN:
+    print("❌ ОШИБКА: Не найден BOT_TOKEN в файле .env")
+    print("📝 Получите токен у @BotFather в Telegram")
+    exit(1)
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+# Хранилище данных
+vacancies = []
+candidates = []
+
+
+# Клавиатуры
+def get_main_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Список вакансий"), KeyboardButton(text="➕ Добавить вакансию")],
+            [KeyboardButton(text="👥 Кандидаты"), KeyboardButton(text="📊 Статистика")],
+            [KeyboardButton(text="ℹ️ Помощь")]
+        ],
+        resize_keyboard=True
+    )
+
+
+def get_candidates_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="👤 Добавить кандидата"), KeyboardButton(text="📋 Список кандидатов")],
+            [KeyboardButton(text="🔙 Назад")]
+        ],
+        resize_keyboard=True
+    )
+
+
+# Команды бота
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.answer(
+        "👋 Добро пожаловать в HR-ассистент!\n\n"
+        "Я помогу вам управлять вакансиями и кандидатами.\n"
+        "Выберите действие из меню ниже:",
+        reply_markup=get_main_keyboard()
+    )
+
+
+@dp.message(Command("help"))
+async def cmd_help(message: types.Message):
+    await message.answer(
+        "🤖 <b>HR-ассистент - команды:</b>\n\n"
+        "• 📋 Список вакансий - просмотр вакансий\n"
+        "• ➕ Добавить вакансию - создать вакансию\n"
+        "• 👥 Кандидаты - управление кандидатами\n"
+        "• 📊 Статистика - общая статистика\n\n"
+        "Используйте кнопки меню для навигации!",
+        parse_mode="HTML"
+    )
+
+
+# Обработка кнопок
+@dp.message(lambda message: message.text == "📋 Список вакансий")
+async def show_vacancies(message: types.Message):
+    if not vacancies:
+        await message.answer("📭 Нет активных вакансий")
+        return
+
+    response = "📋 <b>Активные вакансии:</b>\n\n"
+    for i, vacancy in enumerate(vacancies, 1):
+        response += f"{i}. <b>{vacancy['title']}</b>\n"
+        response += f"   📝 {vacancy['description']}\n"
+        response += f"   ✅ Требования: {vacancy['requirements']}\n\n"
+
+    await message.answer(response, parse_mode="HTML")
+
+
+@dp.message(lambda message: message.text == "➕ Добавить вакансию")
+async def add_vacancy(message: types.Message):
+    # Простой способ добавления вакансии
+    await message.answer(
+        "Чтобы добавить вакансию, отправьте сообщение в формате:\n\n"
+        "<b>Название вакансии</b>\n"
+        "<b>Описание</b>\n"
+        "<b>Требования</b>\n\n"
+        "Пример:\n"
+        "Менеджер по продажам\n"
+        "Работа с клиентами, активные продажи\n"
+        "Опыт от 1 года, коммуникабельность",
+        parse_mode="HTML"
+    )
+
+
+# Обработка многострочных сообщений для вакансий
+@dp.message(lambda message: message.text and len(message.text.split('\n')) >= 3)
+async def process_vacancy_text(message: types.Message):
+    lines = message.text.split('\n')
+    if len(lines) >= 3:
+        vacancy = {
+            'title': lines[0].strip(),
+            'description': lines[1].strip(),
+            'requirements': lines[2].strip()
+        }
+        vacancies.append(vacancy)
+        await message.answer(
+            f"✅ Вакансия добавлена!\n\n"
+            f"<b>{vacancy['title']}</b>\n"
+            f"{vacancy['description']}\n"
+            f"<i>Требования: {vacancy['requirements']}</i>",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
+
+
+@dp.message(lambda message: message.text == "👥 Кандидаты")
+async def show_candidates_menu(message: types.Message):
+    await message.answer("Управление кандидатами:", reply_markup=get_candidates_keyboard())
+
+
+@dp.message(lambda message: message.text == "👤 Добавить кандидата")
+async def add_candidate(message: types.Message):
+    await message.answer(
+        "Чтобы добавить кандидата, отправьте сообщение в формате:\n\n"
+        "<b>ФИО кандидата</b>\n"
+        "<b>Контакты</b>\n"
+        "<b>Вакансия</b>\n\n"
+        "Пример:\n"
+        "Иванов Иван Иванович\n"
+        "+7-999-123-45-67\n"
+        "Менеджер по продажам",
+        parse_mode="HTML"
+    )
+
+
+# Обработка кандидатов
+@dp.message(lambda message: message.text and len(message.text.split('\n')) == 3)
+async def process_candidate_text(message: types.Message):
+    lines = message.text.split('\n')
+    if len(lines) == 3:
+        candidate = {
+            'name': lines[0].strip(),
+            'contact': lines[1].strip(),
+            'vacancy': lines[2].strip(),
+            'status': 'Новый'
+        }
+        candidates.append(candidate)
+        await message.answer(
+            f"✅ Кандидат добавлен!\n\n"
+            f"<b>ФИО:</b> {candidate['name']}\n"
+            f"<b>Контакты:</b> {candidate['contact']}\n"
+            f"<b>Вакансия:</b> {candidate['vacancy']}\n"
+            f"<b>Статус:</b> {candidate['status']}",
+            parse_mode="HTML",
+            reply_markup=get_candidates_keyboard()
+        )
+
+
+@dp.message(lambda message: message.text == "📋 Список кандидатов")
+async def show_candidates_list(message: types.Message):
+    if not candidates:
+        await message.answer("👥 Нет добавленных кандидатов")
+        return
+
+    response = "👥 <b>Список кандидатов:</b>\n\n"
+    for i, candidate in enumerate(candidates, 1):
+        response += f"{i}. <b>{candidate['name']}</b>\n"
+        response += f"   📞 {candidate['contact']}\n"
+        response += f"   💼 {candidate['vacancy']}\n"
+        response += f"   🟢 {candidate['status']}\n\n"
+
+    await message.answer(response, parse_mode="HTML")
+
+
+@dp.message(lambda message: message.text == "📊 Статистика")
+async def show_statistics(message: types.Message):
+    total_vacancies = len(vacancies)
+    total_candidates = len(candidates)
+
+    response = f"📊 <b>Статистика HR-ассистента:</b>\n\n"
+    response += f"• 📋 Активных вакансий: <b>{total_vacancies}</b>\n"
+    response += f"• 👥 Всего кандидатов: <b>{total_candidates}</b>\n"
+
+    if candidates:
+        status_stats = {}
+        for candidate in candidates:
+            status = candidate['status']
+            status_stats[status] = status_stats.get(status, 0) + 1
+
+        response += "\n<b>Статусы кандидатов:</b>\n"
+        for status, count in status_stats.items():
+            response += f"  • {status}: {count}\n"
+
+    await message.answer(response, parse_mode="HTML")
+
+
+@dp.message(lambda message: message.text == "🔙 Назад")
+async def back_to_main(message: types.Message):
+    await message.answer("Главное меню:", reply_markup=get_main_keyboard())
+
+
+@dp.message(lambda message: message.text == "ℹ️ Помощь")
+async def show_help(message: types.Message):
+    await cmd_help(message)
+
+
+# Запуск бота
+async def main():
+    print("🤖 HR-ассистент запускается...")
+    print("📝 Убедитесь, что в файле .env указан правильный BOT_TOKEN")
+    print("🛑 Для остановки бота нажмите Ctrl+C")
+
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Бот остановлен")
