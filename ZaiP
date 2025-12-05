@@ -1,0 +1,333 @@
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import random
+
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# База данных
+Base = declarative_base()
+engine = create_engine('sqlite:///dating_bot.db')
+Session = sessionmaker(bind=engine)
+
+class UserProfile(Base):
+    __tablename__ = 'profiles'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, unique=True)
+    username = Column(String)
+    name = Column(String)
+    age = Column(Integer)
+    gender = Column(String)  # 'male', 'female', 'other'
+    looking_for = Column(String)  # 'male', 'female', 'both'
+    city = Column(String)
+    bio = Column(Text)
+    photo_id = Column(String)
+    is_active = Column(Boolean, default=True)
+
+Base.metadata.create_all(engine)
+
+class DatingBot:
+    def __init__(self, token: str):
+        self.application = Application.builder().token(token).build()
+        self.setup_handlers()
+    
+    def setup_handlers(self):
+        # Команды
+        self.application.add_handler(CommandHandler("start", self.start))
+        self.application.add_handler(CommandHandler("profile", self.profile))
+        self.application.add_handler(CommandHandler("search", self.search))
+        self.application.add_handler(CommandHandler("stop", self.stop_search))
+        
+        # Обработчики сообщений
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        self.application.add_handler(CallbackQueryHandler(self.handle_button))
+    
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        session = Session()
+        
+        # Проверяем, есть ли профиль пользователя
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        if profile:
+            await update.message.reply_text(
+                f"С возвращением, {user.first_name}!\n\n"
+                "Доступные команды:\n"
+                "/profile - Посмотреть/изменить профиль\n"
+                "/search - Найти анкеты\n"
+                "/stop - Приостановить поиск"
+            )
+        else:
+            await update.message.reply_text(
+                f"Привет, {user.first_name}! 👋\n"
+                "Добро пожаловать в бот для знакомств!\n\n"
+                "Для начала создай свою анкету:\n"
+                "Нажми /profile"
+            )
+        
+        session.close()
+    
+    async def profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        session = Session()
+        user = update.effective_user
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        if profile:
+            # Показываем существующий профиль
+            await self.show_profile(update, context, profile)
+        else:
+            # Начинаем создание нового профиля
+            await self.create_profile(update, context)
+        
+        session.close()
+    
+    async def create_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        context.user_data['creating_profile'] = True
+        context.user_data['profile_step'] = 0
+        
+        keyboard = [
+            [InlineKeyboardButton("Мужской", callback_data="gender_male")],
+            [InlineKeyboardButton("Женский", callback_data="gender_female")],
+            [InlineKeyboardButton("Другой", callback_data="gender_other")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "Давай создадим твой профиль!\n\n"
+            "Сначала выбери свой пол:",
+            reply_markup=reply_markup
+        )
+    
+    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        user_id = query.from_user.id
+        
+        if data.startswith('gender_'):
+            gender = data.split('_')[1]
+            context.user_data['gender'] = gender
+            
+            keyboard = [
+                [InlineKeyboardButton("Мужчин", callback_data="looking_male")],
+                [InlineKeyboardButton("Женщин", callback_data="looking_female")],
+                [InlineKeyboardButton("Всех", callback_data="looking_both")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "Кого ты ищешь?",
+                reply_markup=reply_markup
+            )
+        
+        elif data.startswith('looking_'):
+            looking_for = data.split('_')[1]
+            context.user_data['looking_for'] = looking_for
+            context.user_data['profile_step'] = 1
+            
+            await query.edit_message_text(
+                "Отлично! Теперь введи свой возраст (только цифры):"
+            )
+        
+        elif data.startswith('profile_'):
+            if data == 'profile_edit':
+                await self.create_profile(update, context)
+            elif data == 'profile_view':
+                session = Session()
+                profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+                if profile:
+                    await self.show_profile(update, context, profile)
+                session.close()
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if context.user_data.get('creating_profile'):
+            await self.handle_profile_creation(update, context)
+    
+    async def handle_profile_creation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        step = context.user_data.get('profile_step', 0)
+        text = update.message.text
+        
+        if step == 1:  # Возраст
+            if text.isdigit() and 18 <= int(text) <= 100:
+                context.user_data['age'] = int(text)
+                context.user_data['profile_step'] = 2
+                await update.message.reply_text("В каком городе ты живешь?")
+            else:
+                await update.message.reply_text("Пожалуйста, введи корректный возраст (18-100):")
+        
+        elif step == 2:  # Город
+            context.user_data['city'] = text
+            context.user_data['profile_step'] = 3
+            await update.message.reply_text("Напиши о себе небольшое описание (интересы, хобби, etc):")
+        
+        elif step == 3:  # Описание
+            context.user_data['bio'] = text
+            await self.save_profile(update, context)
+    
+    async def save_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        session = Session()
+        
+        profile = UserProfile(
+            user_id=user.id,
+            username=user.username,
+            name=user.first_name,
+            age=context.user_data['age'],
+            gender=context.user_data['gender'],
+            looking_for=context.user_data['looking_for'],
+            city=context.user_data['city'],
+            bio=context.user_data['bio'],
+            is_active=True
+        )
+        
+        session.add(profile)
+        session.commit()
+        session.close()
+        
+        # Очищаем временные данные
+        context.user_data.clear()
+        
+        await update.message.reply_text(
+            "🎉 Твой профиль создан!\n\n"
+            "Теперь ты можешь:\n"
+            "/search - Начать поиск анкет\n"
+            "/profile - Посмотреть свой профиль"
+        )
+    
+    async def show_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE, profile: UserProfile):
+        gender_text = {
+            'male': 'Мужской',
+            'female': 'Женский',
+            'other': 'Другой'
+        }
+        
+        looking_text = {
+            'male': 'Мужчин',
+            'female': 'Женщин',
+            'both': 'Всех'
+        }
+        
+        profile_text = (
+            f"👤 Твой профиль:\n\n"
+            f"Имя: {profile.name}\n"
+            f"Возраст: {profile.age}\n"
+            f"Пол: {gender_text.get(profile.gender, profile.gender)}\n"
+            f"Ищу: {looking_text.get(profile.looking_for, profile.looking_for)}\n"
+            f"Город: {profile.city}\n"
+            f"О себе: {profile.bio}\n\n"
+            f"Статус: {'🔍 Активен' if profile.is_active else '⏸ Приостановлен'}"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("✏️ Редактировать", callback_data="profile_edit")],
+            [InlineKeyboardButton("🔍 Начать поиск", callback_data="search_now")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if hasattr(update, 'message'):
+            await update.message.reply_text(profile_text, reply_markup=reply_markup)
+        else:
+            await update.callback_query.message.reply_text(profile_text, reply_markup=reply_markup)
+    
+    async def search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        session = Session()
+        user = update.effective_user
+        
+        # Получаем профиль пользователя
+        user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        if not user_profile:
+            await update.message.reply_text("Сначала создай профиль командой /profile")
+            session.close()
+            return
+        
+        if not user_profile.is_active:
+            await update.message.reply_text("Твой профиль неактивен. Активируй его в настройках профиля.")
+            session.close()
+            return
+        
+        # Ищем подходящие анкеты
+        if user_profile.looking_for == 'both':
+            profiles = session.query(UserProfile).filter(
+                UserProfile.user_id != user.id,
+                UserProfile.is_active == True
+            ).all()
+        else:
+            profiles = session.query(UserProfile).filter(
+                UserProfile.user_id != user.id,
+                UserProfile.gender == user_profile.looking_for,
+                UserProfile.is_active == True
+            ).all()
+        
+        if not profiles:
+            await update.message.reply_text("Пока нет подходящих анкет 😔\nПопробуй позже!")
+            session.close()
+            return
+        
+        # Выбираем случайную анкету
+        random_profile = random.choice(profiles)
+        await self.show_other_profile(update, context, random_profile)
+        
+        session.close()
+    
+    async def show_other_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE, profile: UserProfile):
+        gender_text = {
+            'male': 'Мужчина',
+            'female': 'Женщина',
+            'other': 'Другой пол'
+        }
+        
+        profile_text = (
+            f"👤 Найденная анкета:\n\n"
+            f"Имя: {profile.name}\n"
+            f"Возраст: {profile.age}\n"
+            f"Пол: {gender_text.get(profile.gender, profile.gender)}\n"
+            f"Город: {profile.city}\n"
+            f"О себе: {profile.bio}\n\n"
+            f"Username: @{profile.username}" if profile.username else "Username: не указан"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("💌 Написать", url=f"tg://user?id={profile.user_id}")],
+            [InlineKeyboardButton("➡️ Следующая анкета", callback_data="next_profile")],
+            [InlineKeyboardButton("❌ Стоп", callback_data="stop_search")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if hasattr(update, 'message'):
+            await update.message.reply_text(profile_text, reply_markup=reply_markup)
+        else:
+            await update.callback_query.message.reply_text(profile_text, reply_markup=reply_markup)
+    
+    async def stop_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        session = Session()
+        user = update.effective_user
+        
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile:
+            profile.is_active = False
+            session.commit()
+            await update.message.reply_text("❌ Поиск приостановлен. Твой профиль скрыт от других пользователей.")
+        else:
+            await update.message.reply_text("У тебя еще нет профиля. Создай его командой /profile")
+        
+        session.close()
+    
+    def run(self):
+        self.application.run_polling()
+
+# Запуск бота
+if __name__ == "__main__":
+    # Замени 'YOUR_BOT_TOKEN' на токен от @BotFather
+    TOKEN = ""
+    bot = DatingBot(TOKEN)
+    bot.run()
