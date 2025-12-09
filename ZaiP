@@ -1,333 +1,1492 @@
+import os
 import logging
+from typing import Dict, Optional, List, Set, Tuple
+from datetime import datetime
+from collections import defaultdict
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import random
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ConversationHandler,
+    filters,
+    ContextTypes
+)
 
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
-# База данных
-Base = declarative_base()
-engine = create_engine('sqlite:///dating_bot.db')
-Session = sessionmaker(bind=engine)
+# Состояния для ConversationHandler
+NAME, AGE, GENDER, CITY, PHOTO, BIO, CONFIRM = range(7)
 
-class UserProfile(Base):
-    __tablename__ = 'profiles'
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, unique=True)
-    username = Column(String)
-    name = Column(String)
-    age = Column(Integer)
-    gender = Column(String)  # 'male', 'female', 'other'
-    looking_for = Column(String)  # 'male', 'female', 'both'
-    city = Column(String)
-    bio = Column(Text)
-    photo_id = Column(String)
-    is_active = Column(Boolean, default=True)
+# Хранилище данных пользователей
+user_profiles: Dict[int, Dict] = {}
 
-Base.metadata.create_all(engine)
+# Хранилище симпатий: {user_id: set(liked_user_ids)}
+likes: Dict[int, Set[int]] = defaultdict(set)
 
-class DatingBot:
-    def __init__(self, token: str):
-        self.application = Application.builder().token(token).build()
-        self.setup_handlers()
-    
-    def setup_handlers(self):
-        # Команды
-        self.application.add_handler(CommandHandler("start", self.start))
-        self.application.add_handler(CommandHandler("profile", self.profile))
-        self.application.add_handler(CommandHandler("search", self.search))
-        self.application.add_handler(CommandHandler("stop", self.stop_search))
-        
-        # Обработчики сообщений
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-        self.application.add_handler(CallbackQueryHandler(self.handle_button))
-    
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user = update.effective_user
-        session = Session()
-        
-        # Проверяем, есть ли профиль пользователя
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        
-        if profile:
+# Хранилище взаимных симпатий (matches)
+matches: Dict[Tuple[int, int], datetime] = {}
+
+# Хранилище сообщений между пользователями
+# Структура: {(user1_id, user2_id): [{"from": user_id, "text": "message", "time": datetime}, ...]}
+chat_messages: Dict[Tuple[int, int], List[Dict]] = defaultdict(list)
+
+# Хранилище активных чатов пользователей {user_id: partner_id}
+active_chats: Dict[int, int] = {}
+
+# Популярные города для быстрого выбора
+POPULAR_CITIES = [
+    "Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Казань",
+    "Нижний Новгород", "Челябинск", "Самара", "Омск", "Ростов-на-Дону",
+    "Уфа", "Красноярск", "Саратов", "Пермь", "Волгоград"
+]
+
+
+class UserProfile:
+    """Класс для хранения профиля пользователя"""
+
+    def __init__(self):
+        self.name = None
+        self.age = None
+        self.gender = None
+        self.city = None
+        self.photo_id = None
+        self.bio = None
+        self.created_at = None
+        self.likes_count = 0  # Количество полученных лайков
+
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'age': self.age,
+            'gender': self.gender,
+            'city': self.city,
+            'photo_id': self.photo_id,
+            'bio': self.bio,
+            'created_at': self.created_at,
+            'likes_count': self.likes_count
+        }
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Начало создания анкеты"""
+    user = update.effective_user
+
+    # Проверяем, есть ли у пользователя активный чат
+    if update.effective_user.id in active_chats:
+        await show_active_chat(update, context)
+        return ConversationHandler.END
+
+    await update.message.reply_text(
+        f"Привет, {user.first_name}! Давай создадим твою анкету.\n"
+        "Введите ваше имя:"
+    )
+    return NAME
+
+
+async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение имени"""
+    context.user_data['profile'] = UserProfile()
+    context.user_data['profile'].name = update.message.text
+
+    await update.message.reply_text("Сколько вам лет?")
+    return AGE
+
+
+async def get_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение возраста"""
+    try:
+        age = int(update.message.text)
+        if age < 10 or age > 99:
+            await update.message.reply_text("Пожалуйста, введите реальный возраст (10-99):")
+            return AGE
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите число:")
+        return AGE
+
+    context.user_data['profile'].age = age
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Мужской", callback_data="male"),
+            InlineKeyboardButton("Женский", callback_data="female")
+        ],
+        [
+            InlineKeyboardButton("Другой", callback_data="other")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text("Выберите ваш пол:", reply_markup=reply_markup)
+    return GENDER
+
+
+async def get_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение пола"""
+    query = update.callback_query
+    await query.answer()
+
+    gender_map = {
+        "male": "Мужской",
+        "female": "Женский",
+        "other": "Другой"
+    }
+
+    context.user_data['profile'].gender = gender_map[query.data]
+
+    await query.edit_message_text(text=f"Пол: {gender_map[query.data]}")
+
+    # Создаем клавиатуру с популярными городами
+    keyboard = []
+    row = []
+    for i, city in enumerate(POPULAR_CITIES, 1):
+        row.append(InlineKeyboardButton(city, callback_data=f"city_{city}"))
+        if i % 3 == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("✏️ Ввести другой город", callback_data="city_other")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.message.reply_text(
+        "Выберите ваш город или введите свой:",
+        reply_markup=reply_markup
+    )
+    return CITY
+
+
+async def get_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение города"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "city_other":
+        await query.edit_message_text(
+            "Введите название вашего города:"
+        )
+        return CITY
+
+    # Получаем город из callback_data (убираем префикс "city_")
+    city = query.data[5:]  # "city_Москва" -> "Москва"
+    context.user_data['profile'].city = city
+
+    await query.edit_message_text(text=f"Город: {city}")
+    await query.message.reply_text(
+        "Отправьте ваше фото (максимум 15 МБ).\n"
+        "Поддерживаемые форматы: JPEG, PNG"
+    )
+    return PHOTO
+
+
+async def get_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение города из текстового сообщения"""
+    city = update.message.text.strip()
+    if len(city) < 2:
+        await update.message.reply_text("Название города слишком короткое. Введите ещё раз:")
+        return CITY
+
+    context.user_data['profile'].city = city
+
+    await update.message.reply_text(
+        f"Город: {city}\n\n"
+        "Отправьте ваше фото (максимум 15 МБ).\n"
+        "Поддерживаемые форматы: JPEG, PNG"
+    )
+    return PHOTO
+
+
+async def get_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение фото с проверкой размера"""
+    if update.message.photo:
+        photo = update.message.photo[-1]
+
+        # Получаем информацию о файле
+        photo_file = await photo.get_file()
+        file_size = photo_file.file_size
+
+        # Проверяем размер файла (15 МБ = 15 * 1024 * 1024 байт)
+        if file_size > 15 * 1024 * 1024:
             await update.message.reply_text(
-                f"С возвращением, {user.first_name}!\n\n"
-                "Доступные команды:\n"
-                "/profile - Посмотреть/изменить профиль\n"
-                "/search - Найти анкеты\n"
-                "/stop - Приостановить поиск"
+                "Фото слишком большое! Максимальный размер - 15 МБ.\n"
+                "Пожалуйста, отправьте фото меньшего размера:"
             )
-        else:
-            await update.message.reply_text(
-                f"Привет, {user.first_name}! 👋\n"
-                "Добро пожаловать в бот для знакомств!\n\n"
-                "Для начала создай свою анкету:\n"
-                "Нажми /profile"
+            return PHOTO
+
+        # Сохраняем file_id фото (в Telegram можно хранить только file_id)
+        context.user_data['profile'].photo_id = photo.file_id
+
+        await update.message.reply_text("Фото получено! Теперь напишите краткую информацию о себе:")
+        return BIO
+
+    else:
+        await update.message.reply_text("Пожалуйста, отправьте фото:")
+        return PHOTO
+
+
+async def get_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получение био"""
+    context.user_data['profile'].bio = update.message.text
+    context.user_data['profile'].created_at = datetime.now()
+
+    # Показываем предварительный просмотр анкеты
+    profile = context.user_data['profile']
+
+    preview_text = (
+        "📋 *Предварительный просмотр вашей анкеты:*\n\n"
+        f"👤 *Имя:* {profile.name}\n"
+        f"🎂 *Возраст:* {profile.age}\n"
+        f"⚧ *Пол:* {profile.gender}\n"
+        f"🏙️ *Город:* {profile.city}\n"
+        f"📝 *О себе:* {profile.bio}\n\n"
+        "Всё верно?"
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Да, сохранить", callback_data="confirm_yes"),
+            InlineKeyboardButton("❌ Нет, изменить", callback_data="confirm_no")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if profile.photo_id:
+        await update.message.reply_photo(
+            photo=profile.photo_id,
+            caption=preview_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            preview_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+    return CONFIRM
+
+
+async def confirm_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Подтверждение анкеты"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "confirm_yes":
+        # Сохраняем профиль
+        user_id = update.effective_user.id
+        profile = context.user_data['profile']
+        user_profiles[user_id] = profile.to_dict()
+
+        await query.edit_message_caption(
+            caption="✅ *Анкета успешно сохранена!*\n\n"
+                    "Используйте /profile для просмотра своей анкеты\n"
+                    "Используйте /edit для изменения анкеты\n"
+                    "Используйте /discover для поиска анкет\n"
+                    "Используйте /likes для просмотра симпатий\n"
+                    "Используйте /matches для просмотра и общения с взаимными симпатиями",
+            parse_mode='Markdown'
+        )
+
+        # Очищаем временные данные
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    else:
+        # Начинаем заново
+        await query.edit_message_caption(caption="Давайте начнём заново. Введите ваше имя:")
+        return NAME
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Отмена создания анкеты"""
+    await update.message.reply_text("Создание анкеты отменено.")
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать свою анкету"""
+    user_id = update.effective_user.id
+
+    if user_id not in user_profiles:
+        await update.message.reply_text(
+            "У вас ещё нет анкету. Создайте её с помощью команды /start"
+        )
+        return
+
+    profile = user_profiles[user_id]
+
+    # Считаем статистику
+    total_likes = profile['likes_count']
+    given_likes = len(likes.get(user_id, set()))
+    user_matches = sum(1 for (u1, u2) in matches.keys() if u1 == user_id or u2 == user_id)
+
+    profile_text = (
+        "📋 *Ваша анкета:*\n\n"
+        f"👤 *Имя:* {profile['name']}\n"
+        f"🎂 *Возраст:* {profile['age']}\n"
+        f"⚧ *Пол:* {profile['gender']}\n"
+        f"🏙️ *Город:* {profile['city']}\n"
+        f"📝 *О себе:* {profile['bio']}\n"
+        f"❤️ *Получено симпатий:* {total_likes}\n"
+        f"🤍 *Отправлено симпатий:* {given_likes}\n"
+        f"💕 *Взаимных симпатий:* {user_matches}\n"
+        f"📅 *Создано:* {profile['created_at'].strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    if profile['photo_id']:
+        await update.message.reply_photo(
+            photo=profile['photo_id'],
+            caption=profile_text,
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(profile_text, parse_mode='Markdown')
+
+
+async def discover_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Поиск анкет для просмотра (с симпатиями)"""
+    user_id = update.effective_user.id
+
+    # Проверяем активный чат
+    if user_id in active_chats:
+        await show_active_chat(update, context)
+        return
+
+    if user_id not in user_profiles:
+        await update.message.reply_text(
+            "Сначала создайте анкету с помощью /start"
+        )
+        return
+
+    # Находим анкеты, которые пользователь ещё не видел (не лайкал и не дизлайкал)
+    user_likes = likes.get(user_id, set())
+
+    # Исключаем свою анкету и уже лайкнутые
+    available_profiles = []
+    for uid, profile in user_profiles.items():
+        if uid != user_id and uid not in user_likes:
+            available_profiles.append((uid, profile))
+
+    if not available_profiles:
+        await update.message.reply_text(
+            "Вы просмотрели все анкеты! Попробуйте позже или используйте /search для поиска по городу."
+        )
+        return
+
+    # Выбираем случайную анкету для показа
+    import random
+    random_profile_id, random_profile = random.choice(available_profiles)
+
+    # Сохраняем ID текущего просматриваемого профиля
+    context.user_data['current_discovery_id'] = random_profile_id
+
+    # Формируем текст анкеты
+    profile_text = (
+        f"👤 *{random_profile['name']}, {random_profile['age']}*\n"
+        f"⚧ *Пол:* {random_profile['gender']}\n"
+        f"🏙️ *Город:* {random_profile['city']}\n"
+        f"📝 *О себе:* {random_profile['bio']}\n"
+        f"❤️ *Симпатий:* {random_profile['likes_count']}"
+    )
+
+    # Создаем клавиатуру с действиями
+    keyboard = [
+        [
+            InlineKeyboardButton("❤️ Нравится", callback_data=f"like_{random_profile_id}"),
+            InlineKeyboardButton("➡️ Дальше", callback_data="discovery_next")
+        ],
+        [
+            InlineKeyboardButton("🔍 Фильтр по городу", callback_data="discovery_filter"),
+            InlineKeyboardButton("🚫 Пропустить", callback_data=f"skip_{random_profile_id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if random_profile['photo_id']:
+        await update.message.reply_photo(
+            photo=random_profile['photo_id'],
+            caption=profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+
+async def handle_discovery_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик действий при просмотре анкет"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    data = query.data
+
+    if data.startswith("like_"):
+        # Обработка лайка
+        liked_user_id = int(data.split("_")[1])
+
+        # Добавляем лайк
+        likes[user_id].add(liked_user_id)
+
+        # Увеличиваем счетчик лайков у получателя
+        if liked_user_id in user_profiles:
+            user_profiles[liked_user_id]['likes_count'] += 1
+
+        # Проверяем на взаимный лайк
+        if user_id in likes.get(liked_user_id, set()):
+            # Создаем взаимную симпатию
+            match_key = tuple(sorted((user_id, liked_user_id)))
+            matches[match_key] = datetime.now()
+
+            # Уведомляем обоих пользователей
+            liked_user_name = user_profiles[liked_user_id]['name']
+            current_user_name = user_profiles[user_id]['name']
+
+            # Уведомление текущему пользователю
+            await query.edit_message_caption(
+                caption=f"💕 *ВЗАИМНАЯ СИМПАТИЯ!*\n\n"
+                        f"Вы и {liked_user_name} понравились друг другу!\n\n"
+                        f"Начните общение, используя команду /chats",
+                parse_mode='Markdown'
             )
-        
-        session.close()
-    
-    async def profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        session = Session()
-        user = update.effective_user
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        
-        if profile:
-            # Показываем существующий профиль
-            await self.show_profile(update, context, profile)
+
+            # Уведомление другому пользователю (если бот может отправить сообщение)
+            try:
+                await context.bot.send_message(
+                    chat_id=liked_user_id,
+                    text=f"💕 *ВЗАИМНАЯ СИМПАТИЯ!*\n\n"
+                         f"Вы и {current_user_name} понравились друг другу!\n\n"
+                         f"Начните общение, используя команду /chats",
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logger.error(f"Не удалось отправить уведомление о взаимной симпатии: {e}")
         else:
-            # Начинаем создание нового профиля
-            await self.create_profile(update, context)
-        
-        session.close()
-    
-    async def create_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        context.user_data['creating_profile'] = True
-        context.user_data['profile_step'] = 0
-        
+            await query.edit_message_caption(
+                caption="❤️ *Симпатия отправлена!*\n\n"
+                        "Если пользователь ответит взаимностью, вы получите уведомление.",
+                parse_mode='Markdown'
+            )
+
+        # Показываем следующую анкету через 2 секунды
+        await asyncio.sleep(2)
+        await discover_profiles(update, context)
+
+    elif data.startswith("skip_"):
+        # Пропуск анкеты
+        skipped_user_id = int(data.split("_")[1])
+        likes[user_id].add(skipped_user_id)  # Добавляем в просмотренные
+
+        await query.edit_message_caption(
+            caption="Анкета пропущена.",
+            parse_mode='Markdown'
+        )
+
+        # Показываем следующую анкету
+        await asyncio.sleep(1)
+        await discover_profiles(update, context)
+
+    elif data == "discovery_next":
+        # Показать следующую анкету
+        current_id = context.user_data.get('current_discovery_id')
+        if current_id:
+            likes[user_id].add(current_id)  # Добавляем текущую анкету в просмотренные
+
+        await query.delete_message()
+        await discover_profiles(update, context)
+
+    elif data == "discovery_filter":
+        # Перейти к фильтру по городу
+        await query.delete_message()
+        await search_city(update, context)
+
+
+async def show_likes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать полученные симпатии"""
+    user_id = update.effective_user.id
+
+    # Проверяем активный чат
+    if user_id in active_chats:
+        await show_active_chat(update, context)
+        return
+
+    if user_id not in user_profiles:
+        await update.message.reply_text(
+            "Сначала создайте анкету с помощью /start"
+        )
+        return
+
+    # Находим пользователей, которые лайкнули текущего пользователя
+    user_likers = []
+    for liker_id, liked_users in likes.items():
+        if user_id in liked_users and liker_id in user_profiles:
+            user_likers.append(liker_id)
+
+    if not user_likers:
+        await update.message.reply_text(
+            "У вас пока нет симпатий. Используйте /discover чтобы просматривать анкеты!"
+        )
+        return
+
+    # Создаем клавиатуру с лайкнувшими пользователями
+    keyboard = []
+    for liker_id in user_likers:
+        profile = user_profiles[liker_id]
+        button_text = f"{profile['name']}, {profile['age']}, {profile['city']}"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"view_like_{liker_id}")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"❤️ *Вас оценили ({len(user_likers)})*:\n\n"
+        "Выберите анкету для просмотра:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+
+async def show_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать взаимные симпатии"""
+    user_id = update.effective_user.id
+
+    # Проверяем активный чат
+    if user_id in active_chats:
+        await show_active_chat(update, context)
+        return
+
+    if user_id not in user_profiles:
+        await update.message.reply_text(
+            "Сначала создайте анкету с помощью /start"
+        )
+        return
+
+    # Находим взаимные симпатии
+    user_matches = []
+    for (u1, u2), match_time in matches.items():
+        if u1 == user_id:
+            user_matches.append((u2, match_time))
+        elif u2 == user_id:
+            user_matches.append((u1, match_time))
+
+    if not user_matches:
+        await update.message.reply_text(
+            "У вас пока нет взаимных симпатий. Продолжайте ставить лайки!"
+        )
+        return
+
+    # Создаем клавиатуру с мэтчами
+    keyboard = []
+    for match_id, match_time in user_matches:
+        if match_id in user_profiles:
+            profile = user_profiles[match_id]
+            button_text = f"{profile['name']}, {profile['age']} 💬"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"chat_with_{match_id}")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"💕 *Взаимные симпатии ({len(user_matches)})*:\n\n"
+        "Выберите пользователя для общения:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+
+async def view_like_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Просмотр деталей лайкнувшего пользователя"""
+    query = update.callback_query
+    await query.answer()
+
+    liker_id = int(query.data.split("_")[2])
+
+    if liker_id not in user_profiles:
+        await query.edit_message_text("Анкета не найдена.")
+        return
+
+    profile = user_profiles[liker_id]
+    user_id = update.effective_user.id
+
+    profile_text = (
+        "❤️ *Пользователь оценил вашу анкету!*\n\n"
+        f"👤 *Имя:* {profile['name']}\n"
+        f"🎂 *Возраст:* {profile['age']}\n"
+        f"⚧ *Пол:* {profile['gender']}\n"
+        f"🏙️ *Город:* {profile['city']}\n"
+        f"📝 *О себе:* {profile['bio']}\n"
+        f"❤️ *Получено симпатий:* {profile['likes_count']}\n"
+        f"📅 *Создано:* {profile['created_at'].strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    # Проверяем, лайкнули ли мы этого пользователя
+    has_liked_back = user_id in likes.get(liker_id, set())
+
+    keyboard = []
+    if not has_liked_back:
+        keyboard.append([InlineKeyboardButton("❤️ Ответить симпатией", callback_data=f"like_back_{liker_id}")])
+    else:
+        # Если уже взаимная симпатия, предлагаем начать чат
+        keyboard.append([InlineKeyboardButton("💬 Начать общение", callback_data=f"chat_with_{liker_id}")])
+
+    keyboard.append([InlineKeyboardButton("⬅️ Назад к симпатиям", callback_data="back_to_likes")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if profile['photo_id']:
+        await query.edit_message_caption(
+            caption=profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await query.edit_message_text(
+            profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+
+async def like_back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ответной симпатии"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    liked_user_id = int(query.data.split("_")[2])
+
+    # Добавляем ответный лайк
+    likes[user_id].add(liked_user_id)
+
+    # Увеличиваем счетчик лайков
+    if liked_user_id in user_profiles:
+        user_profiles[liked_user_id]['likes_count'] += 1
+
+    # Создаем взаимную симпатию
+    match_key = tuple(sorted((user_id, liked_user_id)))
+    matches[match_key] = datetime.now()
+
+    # Уведомляем другого пользователя
+    current_user_name = user_profiles[user_id]['name']
+    liked_user_name = user_profiles[liked_user_id]['name']
+
+    try:
+        await context.bot.send_message(
+            chat_id=liked_user_id,
+            text=f"💕 *ВЗАИМНАЯ СИМПАТИЯ!*\n\n"
+                 f"Вы и {current_user_name} понравились друг другу!\n\n"
+                 f"Начните общение, используя команду /chats",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Не удалось отправить уведомление: {e}")
+
+    await query.edit_message_caption(
+        caption="💕 *Взаимная симпатия создана!*\n\n"
+                f"Вы и {liked_user_name} теперь нравитесь друг другу!\n\n"
+                f"Начните общение через /chats",
+        parse_mode='Markdown'
+    )
+
+
+async def start_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начать чат с пользователем"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    partner_id = int(query.data.split("_")[2])
+
+    # Проверяем, есть ли взаимная симпатия
+    match_key = tuple(sorted((user_id, partner_id)))
+    if match_key not in matches:
+        await query.edit_message_text("Сначала нужно взаимно понравиться друг другу!")
+        return
+
+    # Устанавливаем активный чат
+    active_chats[user_id] = partner_id
+
+    # Получаем информацию о партнере
+    partner_profile = user_profiles[partner_id]
+    partner_name = partner_profile['name']
+
+    # Показываем историю сообщений
+    chat_key = match_key
+    messages = chat_messages.get(chat_key, [])
+
+    chat_history = f"💬 *Чат с {partner_name}*\n\n"
+
+    if messages:
+        for msg in messages[-10:]:  # Показываем последние 10 сообщений
+            sender_name = user_profiles[msg['from']]['name'] if msg['from'] in user_profiles else "Неизвестный"
+            time_str = msg['time'].strftime('%H:%M')
+            prefix = "👤 Вы:" if msg['from'] == user_id else f"👤 {sender_name}:"
+            chat_history += f"{prefix} {msg['text']}\n⏰ {time_str}\n\n"
+    else:
+        chat_history += "💭 *Чат пуст*\nНапишите первое сообщение!\n\n"
+
+    chat_history += "_Введите сообщение или используйте команды ниже:_"
+
+    # Создаем клавиатуру для чата
+    keyboard = [
+        [InlineKeyboardButton("📤 Отправить сообщение", callback_data="send_message")],
+        [InlineKeyboardButton("🔙 Выйти из чата", callback_data="exit_chat")],
+        [InlineKeyboardButton("👁️‍🗨️ Посмотреть анкету", callback_data=f"view_profile_{partner_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        chat_history,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+
+async def handle_chat_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик действий в чате"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    data = query.data
+
+    if data == "send_message":
+        await query.edit_message_text(
+            "✏️ *Введите ваше сообщение:*\n\n"
+            "_Для отмены используйте /cancel в чате_",
+            parse_mode='Markdown'
+        )
+        context.user_data['waiting_for_message'] = True
+
+    elif data == "exit_chat":
+        # Выход из чата
+        if user_id in active_chats:
+            del active_chats[user_id]
+        await query.edit_message_text(
+            "🔙 *Вы вышли из чата*\n\n"
+            "Используйте /matches чтобы вернуться к списку чатов",
+            parse_mode='Markdown'
+        )
+
+    elif data.startswith("view_profile_"):
+        # Просмотр анкеты партнера
+        partner_id = int(data.split("_")[2])
+        await show_partner_profile(update, context, partner_id)
+
+
+async def show_partner_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, partner_id: int):
+    """Показать анкету партнера по чату"""
+    query = update.callback_query
+
+    if partner_id not in user_profiles:
+        await query.edit_message_text("Профиль не найден.")
+        return
+
+    profile = user_profiles[partner_id]
+    user_id = update.effective_user.id
+
+    profile_text = (
+        "👤 *Профиль пользователя:*\n\n"
+        f"*Имя:* {profile['name']}\n"
+        f"*Возраст:* {profile['age']}\n"
+        f"*Пол:* {profile['gender']}\n"
+        f"*Город:* {profile['city']}\n"
+        f"*О себе:* {profile['bio']}\n"
+        f"*Симпатий:* {profile['likes_count']}\n"
+        f"*На сайте с:* {profile['created_at'].strftime('%d.%m.%Y')}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("🔙 Вернуться в чат", callback_data="back_to_chat")],
+        [InlineKeyboardButton("🚫 Заблокировать", callback_data=f"block_user_{partner_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if profile['photo_id']:
+        await query.message.reply_photo(
+            photo=profile['photo_id'],
+            caption=profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await query.message.reply_text(
+            profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+
+async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик сообщений в чате"""
+    user_id = update.effective_user.id
+
+    # Проверяем, есть ли активный чат
+    if user_id not in active_chats:
+        return
+
+    # Проверяем, ждем ли мы сообщение от пользователя
+    if not context.user_data.get('waiting_for_message', False):
+        return
+
+    partner_id = active_chats[user_id]
+
+    # Получаем текст сообщения
+    message_text = update.message.text.strip()
+
+    if not message_text:
+        await update.message.reply_text("Сообщение не может быть пустым!")
+        return
+
+    if message_text.startswith('/'):
+        await update.message.reply_text("В чате нельзя использовать команды. Просто пишите сообщения!")
+        return
+
+    # Сохраняем сообщение
+    chat_key = tuple(sorted((user_id, partner_id)))
+    chat_messages[chat_key].append({
+        'from': user_id,
+        'text': message_text,
+        'time': datetime.now()
+    })
+
+    # Ограничиваем историю сообщений (последние 100)
+    if len(chat_messages[chat_key]) > 100:
+        chat_messages[chat_key] = chat_messages[chat_key][-100:]
+
+    # Отправляем сообщение партнеру
+    user_profile = user_profiles[user_id]
+    user_name = user_profile['name']
+
+    try:
+        await context.bot.send_message(
+            chat_id=partner_id,
+            text=f"💌 *Новое сообщение от {user_name}:*\n\n{message_text}\n\n"
+                 f"_Ответьте через /chats_",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение партнеру: {e}")
+
+    # Подтверждаем отправку
+    await update.message.reply_text(
+        f"✅ *Сообщение отправлено!*\n\n"
+        f"{message_text}",
+        parse_mode='Markdown'
+    )
+
+    # Сбрасываем флаг ожидания
+    context.user_data['waiting_for_message'] = False
+
+    # Показываем обновленный чат
+    await show_active_chat(update, context)
+
+
+async def show_active_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать активный чат"""
+    user_id = update.effective_user.id
+
+    if user_id not in active_chats:
+        # Если нет активного чата, показываем меню
+        await show_matches(update, context)
+        return
+
+    partner_id = active_chats[user_id]
+
+    if partner_id not in user_profiles:
+        await update.message.reply_text("Пользователь не найден. Чат закрыт.")
+        del active_chats[user_id]
+        return
+
+    # Показываем чат
+    partner_profile = user_profiles[partner_id]
+    partner_name = partner_profile['name']
+
+    # Получаем историю сообщений
+    chat_key = tuple(sorted((user_id, partner_id)))
+    messages = chat_messages.get(chat_key, [])
+
+    chat_history = f"💬 *Чат с {partner_name}*\n\n"
+
+    if messages:
+        for msg in messages[-10:]:  # Показываем последние 10 сообщений
+            sender_name = user_profiles[msg['from']]['name'] if msg['from'] in user_profiles else "Неизвестный"
+            time_str = msg['time'].strftime('%H:%M')
+            prefix = "👤 Вы:" if msg['from'] == user_id else f"👤 {sender_name}:"
+            chat_history += f"{prefix} {msg['text']}\n⏰ {time_str}\n\n"
+    else:
+        chat_history += "💭 *Чат пуст*\nНапишите первое сообщение!\n\n"
+
+    chat_history += "_Введите сообщение или используйте команды ниже:_"
+
+    # Создаем клавиатуру для чата
+    keyboard = [
+        [InlineKeyboardButton("📤 Отправить сообщение", callback_data="send_message")],
+        [InlineKeyboardButton("🔙 Выйти из чата", callback_data="exit_chat")],
+        [InlineKeyboardButton("👁️‍🗨️ Посмотреть анкету", callback_data=f"view_profile_{partner_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            chat_history,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            chat_history,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+
+async def show_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать список чатов (команда /chats)"""
+    user_id = update.effective_user.id
+
+    if user_id in active_chats:
+        await show_active_chat(update, context)
+        return
+
+    await show_matches(update, context)
+
+
+async def cancel_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена отправки сообщения в чате"""
+    user_id = update.effective_user.id
+
+    if context.user_data.get('waiting_for_message', False):
+        context.user_data['waiting_for_message'] = False
+        await update.message.reply_text("❌ Отправка сообщения отменена.")
+        await show_active_chat(update, context)
+
+
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование анкеты"""
+    user_id = update.effective_user.id
+
+    if user_id in active_chats:
+        await show_active_chat(update, context)
+        return
+
+    if user_id not in user_profiles:
+        await update.message.reply_text(
+            "У вас ещё нет анкеты. Создайте её с помощью команды /start"
+        )
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("✏️ Изменить имя", callback_data="edit_name")],
+        [InlineKeyboardButton("✏️ Изменить возраст", callback_data="edit_age")],
+        [InlineKeyboardButton("✏️ Изменить пол", callback_data="edit_gender")],
+        [InlineKeyboardButton("✏️ Изменить город", callback_data="edit_city")],
+        [InlineKeyboardButton("✏️ Изменить фото", callback_data="edit_photo")],
+        [InlineKeyboardButton("✏️ Изменить описание", callback_data="edit_bio")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="edit_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        "Что вы хотите изменить в анкете?",
+        reply_markup=reply_markup
+    )
+
+
+async def edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопок редактирования"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "edit_cancel":
+        await query.edit_message_text("Редактирование отменено.")
+        return
+
+    # Сохраняем тип редактирования
+    context.user_data['edit_type'] = query.data
+
+    edit_messages = {
+        "edit_name": "Введите новое имя:",
+        "edit_age": "Введите новый возраст:",
+        "edit_gender": "Выберите новый пол:",
+        "edit_city": "Выберите новый город:",
+        "edit_photo": "Отправьте новое фото (максимум 15 МБ):",
+        "edit_bio": "Введите новое описание:"
+    }
+
+    if query.data == "edit_gender":
         keyboard = [
-            [InlineKeyboardButton("Мужской", callback_data="gender_male")],
-            [InlineKeyboardButton("Женский", callback_data="gender_female")],
+            [
+                InlineKeyboardButton("Мужской", callback_data="gender_male"),
+                InlineKeyboardButton("Женский", callback_data="gender_female")
+            ],
             [InlineKeyboardButton("Другой", callback_data="gender_other")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            "Давай создадим твой профиль!\n\n"
-            "Сначала выбери свой пол:",
+        await query.edit_message_text(
+            "Выберите новый пол:",
             reply_markup=reply_markup
         )
-    
-    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        await query.answer()
-        
-        data = query.data
-        user_id = query.from_user.id
-        
-        if data.startswith('gender_'):
-            gender = data.split('_')[1]
-            context.user_data['gender'] = gender
-            
-            keyboard = [
-                [InlineKeyboardButton("Мужчин", callback_data="looking_male")],
-                [InlineKeyboardButton("Женщин", callback_data="looking_female")],
-                [InlineKeyboardButton("Всех", callback_data="looking_both")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(
-                "Кого ты ищешь?",
-                reply_markup=reply_markup
-            )
-        
-        elif data.startswith('looking_'):
-            looking_for = data.split('_')[1]
-            context.user_data['looking_for'] = looking_for
-            context.user_data['profile_step'] = 1
-            
-            await query.edit_message_text(
-                "Отлично! Теперь введи свой возраст (только цифры):"
-            )
-        
-        elif data.startswith('profile_'):
-            if data == 'profile_edit':
-                await self.create_profile(update, context)
-            elif data == 'profile_view':
-                session = Session()
-                profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-                if profile:
-                    await self.show_profile(update, context, profile)
-                session.close()
-    
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if context.user_data.get('creating_profile'):
-            await self.handle_profile_creation(update, context)
-    
-    async def handle_profile_creation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        step = context.user_data.get('profile_step', 0)
-        text = update.message.text
-        
-        if step == 1:  # Возраст
-            if text.isdigit() and 18 <= int(text) <= 100:
-                context.user_data['age'] = int(text)
-                context.user_data['profile_step'] = 2
-                await update.message.reply_text("В каком городе ты живешь?")
-            else:
-                await update.message.reply_text("Пожалуйста, введи корректный возраст (18-100):")
-        
-        elif step == 2:  # Город
-            context.user_data['city'] = text
-            context.user_data['profile_step'] = 3
-            await update.message.reply_text("Напиши о себе небольшое описание (интересы, хобби, etc):")
-        
-        elif step == 3:  # Описание
-            context.user_data['bio'] = text
-            await self.save_profile(update, context)
-    
-    async def save_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user = update.effective_user
-        session = Session()
-        
-        profile = UserProfile(
-            user_id=user.id,
-            username=user.username,
-            name=user.first_name,
-            age=context.user_data['age'],
-            gender=context.user_data['gender'],
-            looking_for=context.user_data['looking_for'],
-            city=context.user_data['city'],
-            bio=context.user_data['bio'],
-            is_active=True
-        )
-        
-        session.add(profile)
-        session.commit()
-        session.close()
-        
-        # Очищаем временные данные
-        context.user_data.clear()
-        
-        await update.message.reply_text(
-            "🎉 Твой профиль создан!\n\n"
-            "Теперь ты можешь:\n"
-            "/search - Начать поиск анкет\n"
-            "/profile - Посмотреть свой профиль"
-        )
-    
-    async def show_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE, profile: UserProfile):
-        gender_text = {
-            'male': 'Мужской',
-            'female': 'Женский',
-            'other': 'Другой'
-        }
-        
-        looking_text = {
-            'male': 'Мужчин',
-            'female': 'Женщин',
-            'both': 'Всех'
-        }
-        
-        profile_text = (
-            f"👤 Твой профиль:\n\n"
-            f"Имя: {profile.name}\n"
-            f"Возраст: {profile.age}\n"
-            f"Пол: {gender_text.get(profile.gender, profile.gender)}\n"
-            f"Ищу: {looking_text.get(profile.looking_for, profile.looking_for)}\n"
-            f"Город: {profile.city}\n"
-            f"О себе: {profile.bio}\n\n"
-            f"Статус: {'🔍 Активен' if profile.is_active else '⏸ Приостановлен'}"
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("✏️ Редактировать", callback_data="profile_edit")],
-            [InlineKeyboardButton("🔍 Начать поиск", callback_data="search_now")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if hasattr(update, 'message'):
-            await update.message.reply_text(profile_text, reply_markup=reply_markup)
-        else:
-            await update.callback_query.message.reply_text(profile_text, reply_markup=reply_markup)
-    
-    async def search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        session = Session()
-        user = update.effective_user
-        
-        # Получаем профиль пользователя
-        user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        
-        if not user_profile:
-            await update.message.reply_text("Сначала создай профиль командой /profile")
-            session.close()
-            return
-        
-        if not user_profile.is_active:
-            await update.message.reply_text("Твой профиль неактивен. Активируй его в настройках профиля.")
-            session.close()
-            return
-        
-        # Ищем подходящие анкеты
-        if user_profile.looking_for == 'both':
-            profiles = session.query(UserProfile).filter(
-                UserProfile.user_id != user.id,
-                UserProfile.is_active == True
-            ).all()
-        else:
-            profiles = session.query(UserProfile).filter(
-                UserProfile.user_id != user.id,
-                UserProfile.gender == user_profile.looking_for,
-                UserProfile.is_active == True
-            ).all()
-        
-        if not profiles:
-            await update.message.reply_text("Пока нет подходящих анкет 😔\nПопробуй позже!")
-            session.close()
-            return
-        
-        # Выбираем случайную анкету
-        random_profile = random.choice(profiles)
-        await self.show_other_profile(update, context, random_profile)
-        
-        session.close()
-    
-    async def show_other_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE, profile: UserProfile):
-        gender_text = {
-            'male': 'Мужчина',
-            'female': 'Женщина',
-            'other': 'Другой пол'
-        }
-        
-        profile_text = (
-            f"👤 Найденная анкета:\n\n"
-            f"Имя: {profile.name}\n"
-            f"Возраст: {profile.age}\n"
-            f"Пол: {gender_text.get(profile.gender, profile.gender)}\n"
-            f"Город: {profile.city}\n"
-            f"О себе: {profile.bio}\n\n"
-            f"Username: @{profile.username}" if profile.username else "Username: не указан"
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("💌 Написать", url=f"tg://user?id={profile.user_id}")],
-            [InlineKeyboardButton("➡️ Следующая анкета", callback_data="next_profile")],
-            [InlineKeyboardButton("❌ Стоп", callback_data="stop_search")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if hasattr(update, 'message'):
-            await update.message.reply_text(profile_text, reply_markup=reply_markup)
-        else:
-            await update.callback_query.message.reply_text(profile_text, reply_markup=reply_markup)
-    
-    async def stop_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        session = Session()
-        user = update.effective_user
-        
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile:
-            profile.is_active = False
-            session.commit()
-            await update.message.reply_text("❌ Поиск приостановлен. Твой профиль скрыт от других пользователей.")
-        else:
-            await update.message.reply_text("У тебя еще нет профиля. Создай его командой /profile")
-        
-        session.close()
-    
-    def run(self):
-        self.application.run_polling()
+    elif query.data == "edit_city":
+        # Создаем клавиатуру с популярными городами для редактирования
+        keyboard = []
+        row = []
+        for i, city in enumerate(POPULAR_CITIES, 1):
+            row.append(InlineKeyboardButton(city, callback_data=f"edit_city_{city}"))
+            if i % 3 == 0:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("✏️ Ввести другой город", callback_data="edit_city_other")])
 
-# Запуск бота
-if __name__ == "__main__":
-    # Замени 'YOUR_BOT_TOKEN' на токен от @BotFather
-    TOKEN = ""
-    bot = DatingBot(TOKEN)
-    bot.run()
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "Выберите новый город или введите свой:",
+            reply_markup=reply_markup
+        )
+    else:
+        await query.edit_message_text(edit_messages[query.data])
+
+
+async def save_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение изменений"""
+    user_id = update.effective_user.id
+    edit_type = context.user_data.get('edit_type')
+
+    if not edit_type:
+        return
+
+    if edit_type == "edit_name":
+        user_profiles[user_id]['name'] = update.message.text
+        await update.message.reply_text("Имя обновлено!")
+
+    elif edit_type == "edit_age":
+        try:
+            age = int(update.message.text)
+            if age < 10 or age > 99:
+                await update.message.reply_text("Пожалуйста, введите реальный возраст (10-99):")
+                return
+            user_profiles[user_id]['age'] = age
+            await update.message.reply_text("Возраст обновлён!")
+        except ValueError:
+            await update.message.reply_text("Пожалуйста, введите число:")
+            return
+
+    elif edit_type == "edit_photo":
+        if update.message.photo:
+            photo = update.message.photo[-1]
+            photo_file = await photo.get_file()
+            file_size = photo_file.file_size
+
+            if file_size > 15 * 1024 * 1024:
+                await update.message.reply_text(
+                    "Фото слишком большое! Максимальный размер - 15 МБ.\n"
+                    "Пожалуйста, отправьте фото меньшего размера:"
+                )
+                return
+
+            user_profiles[user_id]['photo_id'] = photo.file_id
+            await update.message.reply_text("Фото обновлено!")
+        else:
+            await update.message.reply_text("Пожалуйста, отправьте фото:")
+            return
+
+    elif edit_type == "edit_bio":
+        user_profiles[user_id]['bio'] = update.message.text
+        await update.message.reply_text("Описание обновлено!")
+
+    # Очищаем тип редактирования
+    context.user_data.pop('edit_type', None)
+
+
+async def save_gender_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение изменённого пола"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    gender_map = {
+        "gender_male": "Мужской",
+        "gender_female": "Женский",
+        "gender_other": "Другой"
+    }
+
+    user_profiles[user_id]['gender'] = gender_map[query.data]
+    await query.edit_message_text("Пол обновлён!")
+    context.user_data.pop('edit_type', None)
+
+
+async def save_city_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение изменённого города"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+
+    if query.data == "edit_city_other":
+        await query.edit_message_text("Введите название нового города:")
+        context.user_data['waiting_for_city_text'] = True
+        return
+
+    # Получаем город из callback_data
+    city = query.data[10:]  # "edit_city_Москва" -> "Москва"
+    user_profiles[user_id]['city'] = city
+    await query.edit_message_text(f"Город обновлён на: {city}")
+    context.user_data.pop('edit_type', None)
+
+
+async def save_city_text_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение города из текстового сообщения при редактировании"""
+    if context.user_data.get('waiting_for_city_text'):
+        user_id = update.effective_user.id
+        city = update.message.text.strip()
+
+        if len(city) < 2:
+            await update.message.reply_text("Название города слишком короткое. Введите ещё раз:")
+            return
+
+        user_profiles[user_id]['city'] = city
+        await update.message.reply_text(f"Город обновлён на: {city}")
+
+        context.user_data.pop('waiting_for_city_text', None)
+        context.user_data.pop('edit_type', None)
+
+
+async def search_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Поиск анкет по городу"""
+    user_id = update.effective_user.id
+
+    if user_id in active_chats:
+        await show_active_chat(update, context)
+        return
+
+    if user_id not in user_profiles:
+        await update.message.reply_text("Сначала создайте анкету с помощью /start")
+        return
+
+    if len(user_profiles) <= 1:
+        await update.message.reply_text("Пока нет анкет для поиска.")
+        return
+
+    # Получаем список всех уникальных городов (кроме текущего пользователя)
+    cities = set()
+    for uid, profile in user_profiles.items():
+        if uid != user_id and profile.get('city'):
+            cities.add(profile['city'])
+
+    if not cities:
+        await update.message.reply_text("Пока нет анкет с указанными городами.")
+        return
+
+    # Сортируем города по алфавиту
+    sorted_cities = sorted(list(cities))
+
+    # Создаем клавиатуру с городами
+    keyboard = []
+    row = []
+    for i, city in enumerate(sorted_cities, 1):
+        row.append(InlineKeyboardButton(city, callback_data=f"search_{city}"))
+        if i % 3 == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    keyboard.append([InlineKeyboardButton("⬅️ Назад к Discover", callback_data="back_to_discover")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "Выберите город для поиска анкет:",
+        reply_markup=reply_markup
+    )
+
+
+async def show_city_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать результаты поиска по городу"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "back_to_discover":
+        await query.delete_message()
+        await discover_profiles(update, context)
+        return
+
+    city = query.data[7:]  # "search_Москва" -> "Москва"
+    user_id = update.effective_user.id
+
+    # Находим анкеты в выбранном городе
+    city_profiles = []
+    for uid, profile in user_profiles.items():
+        if uid != user_id and profile.get('city', '').lower() == city.lower():
+            city_profiles.append((uid, profile))
+
+    if not city_profiles:
+        await query.edit_message_text(f"В городе {city} пока нет анкет.")
+        return
+
+    # Сохраняем список профилей для данного города
+    context.user_data['city_search_results'] = city_profiles
+    context.user_data['current_city_index'] = 0
+
+    # Показываем первый профиль
+    await show_next_city_profile(update, context)
+
+
+async def show_next_city_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать следующий профиль в результатах поиска по городу"""
+    city_profiles = context.user_data.get('city_search_results', [])
+    current_index = context.user_data.get('current_city_index', 0)
+
+    if not city_profiles or current_index >= len(city_profiles):
+        await update.callback_query.edit_message_text(
+            "Все анкеты в этом городе просмотрены!"
+        )
+        return
+
+    profile_id, profile = city_profiles[current_index]
+    context.user_data['current_city_profile_id'] = profile_id
+
+    profile_text = (
+        f"🏙️ *Город: {profile['city']}*\n\n"
+        f"👤 *{profile['name']}, {profile['age']}*\n"
+        f"⚧ *Пол:* {profile['gender']}\n"
+        f"📝 *О себе:* {profile['bio']}\n"
+        f"❤️ *Симпатий:* {profile['likes_count']}"
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton("❤️ Нравится", callback_data=f"city_like_{profile_id}"),
+            InlineKeyboardButton("➡️ Дальше", callback_data="city_next")
+        ],
+        [
+            InlineKeyboardButton("🚫 Пропустить", callback_data=f"city_skip_{profile_id}"),
+            InlineKeyboardButton("⬅️ Выбрать другой город", callback_data="back_to_city_select")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if profile['photo_id']:
+        await update.callback_query.edit_message_caption(
+            caption=profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await update.callback_query.edit_message_text(
+            profile_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+
+async def handle_city_search_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик действий при поиске по городу"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    data = query.data
+
+    if data.startswith("city_like_"):
+        # Лайк в поиске по городу
+        liked_user_id = int(data.split("_")[2])
+
+        likes[user_id].add(liked_user_id)
+        if liked_user_id in user_profiles:
+            user_profiles[liked_user_id]['likes_count'] += 1
+
+        # Проверяем на взаимный лайк
+        if user_id in likes.get(liked_user_id, set()):
+            match_key = tuple(sorted((user_id, liked_user_id)))
+            matches[match_key] = datetime.now()
+
+            liked_user_name = user_profiles[liked_user_id]['name']
+            current_user_name = user_profiles[user_id]['name']
+
+            await query.edit_message_caption(
+                caption=f"💕 *ВЗАИМНАЯ СИМПАТИЯ!*\n\n"
+                        f"Вы и {liked_user_name} понравились друг другу!\n\n"
+                        f"Начните общение через /chats",
+                parse_mode='Markdown'
+            )
+
+            try:
+                await context.bot.send_message(
+                    chat_id=liked_user_id,
+                    text=f"💕 *ВЗАИМНАЯ СИМПАТИЯ!*\n\n"
+                         f"Вы и {current_user_name} понравились друг другу!\n\n"
+                         f"Начните общение через /chats",
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logger.error(f"Не удалось отправить уведомление: {e}")
+        else:
+            await query.edit_message_caption(
+                caption="❤️ Симпатия отправлена!",
+                parse_mode='Markdown'
+            )
+
+        # Переходим к следующему профилю
+        context.user_data['current_city_index'] += 1
+        await asyncio.sleep(2)
+        await show_next_city_profile(update, context)
+
+    elif data.startswith("city_skip_"):
+        # Пропуск в поиске по городу
+        skipped_user_id = int(data.split("_")[2])
+        likes[user_id].add(skipped_user_id)
+
+        context.user_data['current_city_index'] += 1
+        await show_next_city_profile(update, context)
+
+    elif data == "city_next":
+        context.user_data['current_city_index'] += 1
+        await show_next_city_profile(update, context)
+
+    elif data == "back_to_city_select":
+        await query.delete_message()
+        await search_city(update, context)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Справка по командам"""
+    help_text = (
+        "📚 *Доступные команды:*\n\n"
+        "/start - Создать новую анкету\n"
+        "/profile - Показать вашу анкету\n"
+        "/edit - Редактировать анкету\n"
+        "/discover - Поиск анкет для знакомств\n"
+        "/likes - Просмотреть полученные симпатии\n"
+        "/matches - Просмотреть взаимные симпатии\n"
+        "/chats - Общение с взаимными симпатиями\n"
+        "/search - Поиск анкет по городу\n"
+        "/help - Показать это сообщение\n\n"
+        "*Как это работает:*\n"
+        "1. Создайте анкету (/start)\n"
+        "2. Смотрите анкеты других (/discover)\n"
+        "3. Ставьте ❤️ если нравится\n"
+        "4. При взаимной симпатии 💕 начинайте общение (/chats)\n"
+        "5. Общайтесь с взаимными симпатиями!\n\n"
+        "*Ограничения:*\n"
+        "• Фотографии до 15 МБ\n"
+        "• Возраст: 10-99 лет"
+    )
+
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ошибок"""
+    logger.error(f"Ошибка: {context.error}")
+
+    if isinstance(context.error, ValueError):
+        await update.message.reply_text("Произошла ошибка. Пожалуйста, попробуйте снова.")
+    elif isinstance(context.error, Exception):
+        await update.message.reply_text("Произошла непредвиденная ошибка.")
+
+
+import asyncio
+
+
+def main():
+    """Запуск бота"""
+    # Токен вашего бота
+    TOKEN = " "
+
+    # Создаём приложение
+    application = Application.builder().token(TOKEN).build()
+
+    # Создаём ConversationHandler для анкеты
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_age)],
+            GENDER: [CallbackQueryHandler(get_gender)],
+            CITY: [
+                CallbackQueryHandler(get_city, pattern=r"^city_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_city_text)
+            ],
+            PHOTO: [MessageHandler(filters.PHOTO, get_photo)],
+            BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_bio)],
+            CONFIRM: [CallbackQueryHandler(confirm_profile)]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+        allow_reentry=True
+    )
+
+    # Добавляем обработчики
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler('profile', show_profile))
+    application.add_handler(CommandHandler('discover', discover_profiles))
+    application.add_handler(CommandHandler('likes', show_likes))
+    application.add_handler(CommandHandler('matches', show_matches))
+    application.add_handler(CommandHandler('chats', show_chats))
+    application.add_handler(CommandHandler('edit', edit_profile))
+    application.add_handler(CommandHandler('search', search_city))
+    application.add_handler(CommandHandler('help', help_command))
+
+    # Команда для отмены отправки сообщения в чате
+    application.add_handler(CommandHandler('cancel', cancel_chat_message))
+
+    # Обработчики callback запросов
+    application.add_handler(CallbackQueryHandler(handle_discovery_action, pattern=r"^(like_|skip_|discovery_)"))
+    application.add_handler(CallbackQueryHandler(handle_city_search_action,
+                                                 pattern=r"^(city_like_|city_skip_|city_next|back_to_city_select)"))
+    application.add_handler(CallbackQueryHandler(show_city_results, pattern=r"^search_"))
+    application.add_handler(CallbackQueryHandler(view_like_detail, pattern=r"^view_like_"))
+    application.add_handler(CallbackQueryHandler(like_back_handler, pattern=r"^like_back_"))
+    application.add_handler(CallbackQueryHandler(start_chat, pattern=r"^chat_with_"))
+    application.add_handler(CallbackQueryHandler(handle_chat_action,
+                                                 pattern=r"^(send_message|exit_chat|back_to_chat|view_profile_|block_user_)"))
+    application.add_handler(
+        CallbackQueryHandler(edit_handler, pattern=r"^edit_(name|age|gender|city|photo|bio|cancel)$"))
+    application.add_handler(CallbackQueryHandler(save_gender_edit, pattern=r"^gender_"))
+    application.add_handler(CallbackQueryHandler(save_city_edit, pattern=r"^edit_city_"))
+
+    # Обработчики текстовых сообщений для редактирования
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.Regex(
+            r'^(?!.*(cancel|help|start|profile|discover|likes|matches|chats|edit|search)).*$'),
+        save_edit
+    ))
+
+    # Обработчик для фото при редактировании
+    application.add_handler(MessageHandler(filters.PHOTO, save_edit))
+
+    # Обработчик для текстового ввода города при редактировании
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        save_city_text_edit
+    ))
+
+    # Обработчик сообщений в чате
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handle_chat_message
+    ))
+
+    # Обработчик ошибок
+    application.add_error_handler(error_handler)
+
+    # Запускаем бота
+    print("Бот запущен...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+if __name__ == '__main__':
+    main()
