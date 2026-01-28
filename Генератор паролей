@@ -1,0 +1,9 @@
+import string
+import random
+def генератор_паролей(длина):
+    характер = string.ascii_letters + string.digits + string.punctuation
+    пароль =''.join(random.choice(характер) for _ in range(длина))
+    return пароль
+пароль_длина = int(input("Длина пароля: "))
+генератор_паролей = генератор_паролей(пароль_длина)
+print("Ваш пароль:", генератор_паролей)
