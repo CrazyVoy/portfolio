@@ -1,0 +1,52 @@
+import pyautogui
+import keyboard
+import time
+import sys
+
+
+def simple_clicker(interval=0.1, stop_key='f8'):
+    """
+    Простой кликер-бот
+
+    :param interval: интервал между кликами в секундах
+    :param stop_key: клавиша для остановки
+    """
+    print(f"Кликер запущен. Интервал: {interval} сек.")
+    print(f"Для остановки нажмите: {stop_key}")
+    print("Для экстренной остановки переместите мышь в верхний левый угол экрана")
+
+    try:
+        while True:
+            # Проверяем, не нажата ли клавиша остановки
+            if keyboard.is_pressed(stop_key):
+                print(f"\nКлавиша '{stop_key}' нажата. Остановка...")
+                break
+
+            # Экстренная остановка (мышь в угол экрана)
+            if pyautogui.position() == (0, 0):
+                print("\nЭкстренная остановка!")
+                break
+
+            # Выполняем клик
+            pyautogui.click()
+
+            # Ждем указанный интервал
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        print("\nОстановлено пользователем")
+    finally:
+        print("Кликер остановлен")
+
+
+# Быстрый запуск с параметрами по умолчанию
+if __name__ == "__main__":
+    # Для быстрого запуска раскомментируйте следующую строку:
+    # simple_clicker(interval=0.05, stop_key='esc')
+
+    # Или используйте меню:
+    print("Быстрый кликер-бот")
+    interval = float(input("Интервал кликов (сек): ") or "0.1")
+    stop_key = input("Клавиша остановки: ") or "f8"
+
+    simple_clicker(interval, stop_key)
