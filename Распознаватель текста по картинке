@@ -1,0 +1,200 @@
+# Сначала установите: pip install easyocr opencv-python-headless pillow
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+from PIL import ImageGrab, Image, ImageTk
+import easyocr
+import numpy as np
+import threading
+
+
+class EasyOCRCapture:
+    def __init__(self, root):
+        self.root = root
+        root.title("EasyOCR Capture Tool")
+        root.geometry("600x500")
+
+        self.start_x = self.start_y = None
+        self.capture_window = None
+        self.screenshot = None
+
+        # Инициализируем EasyOCR
+        print("Загружаю EasyOCR...")
+        self.reader = easyocr.Reader(['ru', 'en'], gpu=False)  # gpu=False для CPU
+
+        self.create_widgets()
+        print("Готов к работе!")
+
+    def create_widgets(self):
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Button(main_frame, text="📷 Захватить область",
+                   command=self.start_capture).pack(pady=10)
+
+        # Предпросмотр
+        self.preview_label = ttk.Label(main_frame, text="Предпросмотр",
+                                       relief="solid", background="white")
+        self.preview_label.pack(pady=10, fill=tk.BOTH, expand=True)
+
+        # Кнопки
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(pady=10)
+
+        ttk.Button(btn_frame, text="🔍 Распознать",
+                   command=self.recognize_thread).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="📋 Копировать",
+                   command=self.copy_text).pack(side=tk.LEFT, padx=5)
+
+        # Текстовое поле
+        text_frame = ttk.LabelFrame(main_frame, text="Результат", padding="5")
+        text_frame.pack(fill=tk.BOTH, expand=True)
+
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.text_area = tk.Text(text_frame, height=10, wrap=tk.WORD,
+                                 yscrollcommand=scrollbar.set)
+        self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.text_area.yview)
+
+        # Статус
+        self.status = ttk.Label(main_frame, text="Готов", relief=tk.SUNKEN)
+        self.status.pack(fill=tk.X, pady=5)
+
+    def start_capture(self):
+        """Начать захват области"""
+        self.status.config(text="Скрываю окно... Выделите область")
+        self.root.withdraw()
+
+        # Создаем окно захвата
+        self.capture_window = tk.Toplevel()
+        self.capture_window.attributes('-fullscreen', True)
+        self.capture_window.attributes('-alpha', 0.3)
+        self.capture_window.configure(bg='black')
+
+        canvas = tk.Canvas(self.capture_window, cursor="cross", bg='black')
+        canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Привязка событий
+        canvas.bind("<ButtonPress-1>", self.mouse_down)
+        canvas.bind("<B1-Motion>", self.mouse_drag)
+        canvas.bind("<ButtonRelease-1>", self.mouse_up)
+        self.capture_window.bind("<Escape>", self.cancel)
+
+        self.rect = None
+        self.capture_window.focus()
+
+    def mouse_down(self, event):
+        self.start_x = event.x
+        self.start_y = event.y
+        canvas = event.widget
+        self.rect = canvas.create_rectangle(self.start_x, self.start_y,
+                                            self.start_x, self.start_y,
+                                            outline='red', width=2)
+
+    def mouse_drag(self, event):
+        if self.rect:
+            canvas = event.widget
+            canvas.coords(self.rect, self.start_x, self.start_y,
+                          event.x, event.y)
+
+    def mouse_up(self, event):
+        x1 = min(self.start_x, event.x)
+        y1 = min(self.start_y, event.y)
+        x2 = max(self.start_x, event.x)
+        y2 = max(self.start_y, event.y)
+
+        if abs(x2 - x1) < 10 or abs(y2 - y1) < 10:
+            messagebox.showwarning("Маленькая область", "Выделите область больше")
+            self.cancel()
+            return
+
+        self.capture_window.destroy()
+        self.root.deiconify()
+
+        self.capture_screenshot(x1, y1, x2, y2)
+
+    def cancel(self, event=None):
+        if self.capture_window:
+            self.capture_window.destroy()
+        self.root.deiconify()
+        self.status.config(text="Захват отменен")
+
+    def capture_screenshot(self, x1, y1, x2, y2):
+        """Делает скриншот"""
+        try:
+            self.screenshot = ImageGrab.grab(bbox=(x1, y1, x2, y2))
+
+            # Показываем превью
+            preview = self.screenshot.copy()
+            preview.thumbnail((400, 300), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(preview)
+
+            self.preview_label.config(image=photo, text="")
+            self.preview_label.image = photo
+
+            self.status.config(text=f"Область захвачена: {x2 - x1}x{y2 - y1} пикселей")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка захвата: {e}")
+
+    def recognize_thread(self):
+        """Запуск распознавания в отдельном потоке"""
+        if self.screenshot is None:
+            messagebox.showwarning("Нет изображения", "Сначала захватите область!")
+            return
+
+        self.status.config(text="Распознаю текст...")
+        self.text_area.delete(1.0, tk.END)
+        self.text_area.insert(1.0, "Распознавание...")
+
+        thread = threading.Thread(target=self.recognize)
+        thread.daemon = True
+        thread.start()
+
+    def recognize(self):
+        """Распознавание текста с EasyOCR"""
+        try:
+            # Конвертируем в numpy array для EasyOCR
+            img_np = np.array(self.screenshot)
+
+            # Распознаем текст
+            results = self.reader.readtext(img_np, paragraph=True)
+
+            # Собираем текст
+            text = "\n".join([result[1] for result in results])
+
+            # Обновляем интерфейс
+            self.root.after(0, self.update_text, text)
+
+        except Exception as e:
+            self.root.after(0, self.show_error, str(e))
+
+    def update_text(self, text):
+        """Обновление текстового поля"""
+        self.text_area.delete(1.0, tk.END)
+        self.text_area.insert(1.0, text.strip())
+
+        char_count = len(text.strip())
+        self.status.config(text=f"Распознано: {char_count} символов")
+
+    def show_error(self, error_msg):
+        """Показать ошибку"""
+        messagebox.showerror("Ошибка", f"Ошибка распознавания:\n{error_msg}")
+        self.status.config(text="Ошибка")
+
+    def copy_text(self):
+        """Копировать текст"""
+        text = self.text_area.get(1.0, tk.END).strip()
+        if text:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self.status.config(text="Текст скопирован")
+
+
+# Запуск программы
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = EasyOCRCapture(root)
+    root.mainloop()
