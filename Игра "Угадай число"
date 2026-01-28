@@ -1,0 +1,18 @@
+import random
+
+def game():
+    number = random.randint(1,20)
+    A = None
+    B = 0
+
+    while A != number:
+        A = int(input("Угадай число от 1 до 20"))
+        B += 1
+        if A<number:
+            print("Мало! Давай ещё")
+        elif A>number:
+            print("Много! Давай ещё")
+
+    print(f"Точно в цель! Число {number} за {B} попыток")
+
+game()
