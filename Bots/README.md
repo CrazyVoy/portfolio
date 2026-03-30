@@ -16,7 +16,7 @@
 
 ### 1. Установите зависимости
 
-```bash
+bash
 pip install aiogram python-dotenv
 
 python HR-assistent.py
